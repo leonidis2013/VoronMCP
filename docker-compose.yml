@@ -1,0 +1,21 @@
+# docker compose up -d
+# Then open http://<this machine's IP>:8080, enter the printer's Moonraker address
+# (for example http://192.168.1.50:7125) and press Connect Claude.
+# Settings, the encrypted API key, the activity list and config backups are kept in the voronmcp-data volume.
+services:
+  voronmcp:
+    image: ghcr.io/leonidis2013/voronmcp:latest
+    pull_policy: always
+    build: .
+    container_name: voronmcp
+    restart: unless-stopped
+    ports:
+      - "8080:8080"   # settings page; keep on your network
+      - "8081:8081"   # public port for a reverse proxy (exposed mode only)
+    volumes:
+      - voronmcp-data:/data
+    environment:
+      TZ: America/Chicago
+
+volumes:
+  voronmcp-data:

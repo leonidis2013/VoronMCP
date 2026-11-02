@@ -1,0 +1,26 @@
+# TrueNAS SCALE: Apps > Discover Apps > Custom App > "Install via YAML", paste this.
+# Settings, the encrypted API key, the activity list and config backups are kept in the
+# voronmcp-data volume, which TrueNAS manages, like HomeClaude's: no dataset or permissions to set up.
+# 9087: the settings page (keep it on your network). 9088: the public port, the only one
+# a reverse proxy should point at, and only used in exposed mode.
+# Change the left-hand numbers if those ports are taken on your TrueNAS.
+# Optional: keep the encryption key off the volume by uncommenting VORONMCP_MASTER_KEY
+# and setting a long random value (keep a copy somewhere safe).
+# pull_policy: always fetches the newest image each time the app is saved or redeployed.
+services:
+  voronmcp:
+    container_name: voronmcp
+    image: ghcr.io/leonidis2013/voronmcp:latest
+    pull_policy: always
+    restart: unless-stopped
+    ports:
+      - '9087:8080'
+      - '9088:8081'
+    environment:
+      TZ: America/Chicago
+      # VORONMCP_MASTER_KEY: 'a long random value'
+    volumes:
+      - voronmcp-data:/data
+
+volumes:
+  voronmcp-data:

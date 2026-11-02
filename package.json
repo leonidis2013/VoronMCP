@@ -1,0 +1,14 @@
+{
+  "name": "voronmcp",
+  "version": "1.0.0",
+  "description": "Bridge between Claude and a Klipper printer (Voron 2.4, CAN toolhead) through Moonraker's own API, using the Model Context Protocol, for tuning, troubleshooting and reliability",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "demo": "node server.js --demo",
+    "test": "node test/run.js"
+  },
+  "engines": { "node": ">=22" },
+  "license": "UNLICENSED",
+  "private": true
+}

@@ -1,0 +1,1716 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>VoronMCP</title>
+<script>
+(function () {
+  var p = 'auto';
+  try { p = localStorage.getItem('vm-theme') || 'auto'; } catch (e) {}
+  var light = p === 'light' || (p === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches);
+  document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+})();
+</script>
+<style>
+  /* Same palette, controls and settings layout as LiveCompanion, LiveMic and the LivePi web page */
+  :root { --bg:#0d1015; --card:#151a21; --card2:#1b2129; --line:#252c36; --fg:#d8dee6; --dim:#7c8794; --faint:#4c5561; --acc:#4c8dff; --teal:#2ec4b6; --bad:#ef4c4c; --ok:#3ecf6e; --warn:#f2c94c; --inset:#0b0e12; --knob:#d8dee6; --onacc:#0d1015; --shadow:#0008; --r:10px; color-scheme:dark; }
+  :root[data-theme=light] { --bg:#e9edf2; --card:#fbfcfd; --card2:#f0f3f6; --line:#d3dae3; --fg:#18202b; --dim:#586474; --faint:#97a1ae; --acc:#2563d6; --teal:#0f9488; --bad:#d63232; --ok:#23a056; --warn:#cf9a10; --inset:#e3e8ee; --knob:#ffffff; --onacc:#ffffff; --shadow:#0003; color-scheme:light; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { min-height:100vh; }
+  .hide { display:none !important; }
+  #app { padding:0 14px calc(20px + env(safe-area-inset-bottom)); }
+
+  header { display:flex; flex-wrap:wrap; gap:14px; align-items:center; padding:10px 14px; padding-top:calc(10px + env(safe-area-inset-top)); margin-bottom:14px;
+           background:var(--card); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:10; }
+  h1 { font-size:15px; margin:0; letter-spacing:.12em; text-transform:uppercase; font-weight:800; }
+  h1 .ver { font-size:10px; font-weight:600; letter-spacing:.02em; text-transform:none; color:var(--dim); vertical-align:1px; margin-left:2px; }
+  h1 small { display:block; font-size:10px; letter-spacing:.04em; color:var(--dim); font-weight:400; text-transform:none; }
+  h2 { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--dim); margin:0 0 10px; font-weight:700; }
+  h2::before { content:""; display:inline-block; width:3px; height:11px; background:var(--acc); border-radius:2px; margin-right:7px; vertical-align:-1px; }
+
+  #status { flex:1; min-width:0; display:flex; gap:6px; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; }
+  #status::-webkit-scrollbar { display:none; }
+  .st { flex:0 0 auto; display:inline-flex; align-items:center; gap:6px; background:var(--card2); border-radius:999px; padding:3px 10px; font-size:12px; color:var(--dim); white-space:nowrap; }
+  .st.bad { background:color-mix(in srgb, var(--bad) 18%, transparent); color:var(--bad); }
+  .st.warn { background:color-mix(in srgb, var(--warn) 16%, transparent); color:var(--warn); }
+  .st.ok { background:color-mix(in srgb, var(--ok) 16%, transparent); color:var(--ok); }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--faint); flex:none; }
+  .dot.ok { background:var(--ok); } .dot.warn { background:var(--warn); } .dot.bad { background:var(--bad); } .dot.acc { background:var(--acc); }
+
+  select, input, button, textarea { background:var(--card2); color:var(--fg); border:1px solid transparent; border-radius:8px; padding:7px 11px; font:inherit; }
+  input:focus, select:focus, textarea:focus { outline:2px solid color-mix(in srgb, var(--acc) 55%, transparent); outline-offset:0; }
+  button { cursor:pointer; font-weight:600; touch-action:manipulation; }
+  button:hover { background:color-mix(in srgb, var(--card2) 80%, var(--fg) 8%); }
+  button:disabled, input:disabled { opacity:.35; cursor:not-allowed; }
+  button.on { background:var(--acc); color:var(--onacc); }
+  button.on:hover { background:color-mix(in srgb, var(--acc) 88%, var(--fg) 12%); }
+  button.danger { color:var(--bad); }
+  .seg { display:inline-flex; background:var(--card2); border-radius:9px; padding:3px; gap:2px; }
+  .seg button { border-radius:7px; background:transparent; padding:6px 12px; }
+  .seg button.on { background:var(--acc); color:var(--onacc); }
+  .note { color:var(--dim); font-size:12px; }
+  a { color:var(--acc); text-decoration:none; } a:hover { text-decoration:underline; }
+
+  /* header buttons: settings turns into Done */
+  .gear { display:flex; align-items:center; justify-content:center; gap:6px; width:32px; height:32px; padding:0; border-radius:8px; background:transparent; color:var(--dim); }
+  .gear:hover { color:var(--fg); background:var(--card2); }
+  .gear svg { width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .gear span { display:none; font-size:13px; }
+  .gear.on { width:auto; padding:0 12px; background:var(--acc); color:var(--onacc); }
+  .gear.on svg { display:none; } .gear.on span { display:inline; }
+  .gear.spin svg { animation:spin 1s linear infinite; }
+  #updAll { padding:6px 14px; }
+  /* Security has its own tab, opened from the top bar */
+  .hsec { display:flex; align-items:center; gap:6px; height:32px; padding:0 12px; border-radius:8px; background:transparent; color:var(--dim); position:relative; }
+  .hsec svg { width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .hsec:hover { color:var(--fg); background:var(--card2); }
+  .hsec.exp:not(.on) { color:var(--warn); }
+  .hsec.on, .hsec.on:hover { background:var(--acc); color:var(--onacc); }
+  .hsec .badge { position:absolute; top:-5px; right:-5px; min-width:18px; height:18px; border-radius:9px; background:var(--warn); color:#111; font-size:10.5px; font-weight:800; display:flex; align-items:center; justify-content:center; padding:0 4px; }
+  #tab-security .secwrap { max-width:820px; }
+  .sechead { display:flex; align-items:center; gap:10px; margin:0 0 6px; }
+  .sechead h2 { margin:0; font-size:13px; }
+
+  /* ===== devices ===== */
+  #alerts { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+  #alerts:empty { display:none; }
+  .devs { display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); gap:12px; align-items:start; }
+  .dev { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--ok); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:9px; min-width:0; }
+  .dev.upd { border-left-color:var(--warn); }
+  .dev.off { border-left-color:var(--bad); }
+  .dev.busy { border-left-color:var(--acc); }
+  .dev.none { border-left-color:var(--faint); }
+  .dh { display:flex; align-items:center; gap:8px; min-width:0; }
+  .dn { flex:1; min-width:0; font-weight:700; font-size:13px; letter-spacing:.08em; text-transform:uppercase; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dsub { font-size:12px; color:var(--dim); margin-top:-6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .chips { display:flex; flex-wrap:wrap; gap:5px; }
+  .chip { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:2px 8px; border-radius:999px; background:var(--card2); color:var(--dim); }
+  .chip.t { background:color-mix(in srgb, var(--teal) 16%, transparent); color:var(--teal); }
+  .rows { display:flex; flex-direction:column; border-top:1px solid var(--line); }
+  .row { display:grid; grid-template-columns:76px 1fr auto; gap:8px; align-items:center; min-height:38px; padding:5px 0; border-bottom:1px solid var(--line); }
+  .row:last-child { border-bottom:0; }
+  .rl { font-size:10.5px; color:var(--dim); letter-spacing:.06em; text-transform:uppercase; }
+  .rv { min-width:0; font-size:13px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+  .rv small { display:block; font-size:11.5px; color:var(--dim); }
+  .rv .up { color:var(--warn); font-weight:700; } .rv .good { color:var(--ok); } .rv .bad { color:var(--bad); } .rv .arrow { color:var(--faint); padding:0 3px; }
+  .row button { padding:5px 12px; font-size:12.5px; }
+  .tag { font-size:11px; color:var(--dim); white-space:nowrap; }
+  .df { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .df .when { flex:1; min-width:90px; font-size:11.5px; color:var(--dim); }
+  .df button { padding:5px 11px; font-size:12.5px; }
+  .errbox { border:1px solid color-mix(in srgb, var(--bad) 55%, transparent); background:color-mix(in srgb, var(--bad) 10%, transparent); border-radius:8px; padding:7px 10px; font-size:12.5px; }
+  .errbox button { margin-top:6px; padding:4px 10px; font-size:12.5px; }
+  .okbox { border:1px solid color-mix(in srgb, var(--ok) 50%, transparent); background:color-mix(in srgb, var(--ok) 10%, transparent); border-radius:8px; padding:7px 10px; font-size:12.5px; }
+  .jobbox { border:1px solid color-mix(in srgb, var(--acc) 45%, transparent); background:color-mix(in srgb, var(--acc) 8%, transparent); border-radius:8px; padding:8px 10px; font-size:12.5px; display:flex; flex-direction:column; gap:5px; }
+  .jstep { display:flex; align-items:center; gap:7px; }
+  .jstep .ic { width:14px; text-align:center; flex:none; font-weight:800; }
+  .jstep.ok .ic { color:var(--ok); } .jstep.failed .ic { color:var(--bad); } .jstep.skipped { color:var(--faint); } .jstep.pending { color:var(--dim); }
+  .jstep.running .ic::before { content:""; display:inline-block; width:10px; height:10px; border:2px solid var(--acc); border-top-color:transparent; border-radius:50%; animation:spin .9s linear infinite; vertical-align:-1px; }
+  pre.tail { margin:2px 0 0; font:11px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:var(--dim); white-space:pre-wrap; overflow-wrap:anywhere; max-height:66px; overflow:hidden; }
+  .link { background:none; border:0; padding:0; color:var(--acc); font-weight:600; font-size:12px; }
+  .link:hover { background:none; text-decoration:underline; }
+  .empty { color:var(--dim); text-align:center; padding:60px 10px; }
+
+  /* ===== settings (same layout as LiveMic and LivePi's Setup) ===== */
+  .setup { display:flex; gap:14px; align-items:flex-start; }
+  .side { display:flex; flex-direction:column; gap:4px; width:168px; flex:0 0 168px; position:sticky; top:64px; }
+  .side button { display:flex; align-items:center; gap:9px; text-align:left; background:transparent; color:var(--dim); font-weight:600; border-color:transparent; }
+  .side button svg { width:16px; height:16px; flex:0 0 16px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .side button:hover { color:var(--fg); }
+  .side button.on { background:var(--card); border-color:var(--line); color:var(--acc); box-shadow:inset 3px 0 0 var(--acc); }
+  .pane { flex:1; min-width:0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:14px; margin-bottom:14px; max-width:820px; }
+  .set { display:flex; align-items:center; gap:12px; padding:11px 0; border-top:1px solid var(--line); }
+  .card > h2 + .set, .set.first { border-top:0; }
+  .sl { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+  .sl b { font-weight:600; font-size:14px; }
+  .sl span { font-size:12px; color:var(--dim); line-height:1.35; }
+  .sl span:empty { display:none; }
+  .sc { flex:0 1 auto; display:flex; gap:6px; align-items:center; justify-content:flex-end; flex-wrap:wrap; min-width:0; }
+  .sc input.txt { width:120px; max-width:100%; }
+  .sc input.num { width:72px; text-align:center; }
+  .sc input.wide { width:190px; max-width:100%; }
+  .sc select { max-width:170px; }
+  .sc .to { font-size:12px; color:var(--dim); }
+  .sc .val { font-size:13px; color:var(--dim); font-variant-numeric:tabular-nums; text-align:right; }
+  .sc .val.ok { color:var(--ok); } .sc .val.warn { color:var(--warn); } .sc .val.bad { color:var(--bad); }
+  .pnote { max-width:820px; margin:0 0 12px; }
+  details > summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:10px; min-height:28px; }
+  details > summary::-webkit-details-marker { display:none; }
+  details > summary::after { content:"›"; margin-left:auto; color:var(--dim); font-size:20px; line-height:1; transition:transform .15s; }
+  details[open] > summary::after { transform:rotate(90deg); }
+  details > summary b { font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:13px; }
+  details > summary .note { margin-left:2px; }
+  details.fold > summary b, details.dcard > summary b { flex:0 1 auto; }
+  details.dcard[open] > summary, details.fold[open] > summary { margin-bottom:8px; }
+  details.sub { border-top:1px solid var(--line); margin-top:6px; padding-top:10px; }
+  details.sub > summary { color:var(--dim); font-size:13px; font-weight:600; }
+  details.fold > .card { border:0; padding:0; margin:0 0 6px; max-width:none; background:transparent; }
+  .locknote { border:1px solid var(--warn); background:color-mix(in srgb, var(--warn) 12%, transparent); border-radius:6px; padding:8px 10px; margin-bottom:12px; font-size:13px; max-width:820px; }
+  .formerr { color:var(--bad); font-size:12.5px; padding:4px 0 2px; }
+  .keybox { width:100%; font:11.5px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; resize:none; height:64px; }
+  .found { display:flex; align-items:center; gap:10px; padding:9px 0; border-top:1px solid var(--line); }
+  .found .fi { flex:1; min-width:0; } .found .fi b { display:block; font-weight:600; } .found .fi span { font-size:12px; color:var(--dim); }
+  .dcard h3 { margin:0 0 4px; font-size:14px; }
+  .act { display:flex; gap:12px; align-items:center; padding:9px 0; border-top:1px solid var(--line); cursor:pointer; }
+  .act:first-child { border-top:0; }
+  .act:hover { background:color-mix(in srgb, var(--card2) 60%, transparent); }
+  .act .ai { flex:1; min-width:0; } .act .ai b { display:block; font-weight:600; } .act .ai span { font-size:12px; color:var(--dim); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bk { display:flex; gap:10px; align-items:center; padding:7px 0; border-top:1px solid var(--line); font-size:13px; }
+  .bk span { flex:1; min-width:0; overflow-wrap:anywhere; } .bk small { color:var(--dim); }
+
+  /* confirm and log windows */
+  .scrim { position:fixed; inset:0; background:#0009; z-index:40; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .modal { background:var(--card); border:1px solid var(--line); border-radius:12px; width:min(560px, 100%); max-height:calc(100vh - 32px); display:flex; flex-direction:column; box-shadow:0 12px 40px var(--shadow); }
+  .modal.big { width:min(860px, 100%); }
+  .mh { padding:14px 16px 4px; font-weight:700; font-size:15px; }
+  .mb { padding:6px 16px 12px; overflow:auto; font-size:13.5px; }
+  .mf { padding:10px 16px 14px; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
+  .mf .sp { flex:1; }
+  .pstep { display:flex; gap:10px; align-items:flex-start; padding:9px 0; border-top:1px solid var(--line); }
+  .pstep:first-child { border-top:0; }
+  .pstep input { margin-top:3px; padding:0; width:16px; height:16px; accent-color:var(--acc); }
+  .pstep b { display:block; font-weight:600; } .pstep span { font-size:12.5px; color:var(--dim); }
+  .pdev { font-weight:700; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); padding:12px 0 2px; }
+  pre.log { margin:0; font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space:pre-wrap; overflow-wrap:anywhere; background:var(--inset); border-radius:8px; padding:10px; max-height:60vh; overflow:auto; }
+
+  .toast { position:fixed; left:50%; bottom:calc(14px + env(safe-area-inset-bottom)); transform:translateX(-50%); background:var(--card); color:var(--fg); border:1px solid var(--bad);
+           padding:8px 14px; border-radius:999px; font-size:14px; display:none; z-index:80; max-width:90vw; box-shadow:0 6px 24px var(--shadow); }
+  .toast.show { display:block; } .toast.good { border-color:var(--ok); }
+
+  .offbar { display:none; position:fixed; left:50%; top:calc(12px + env(safe-area-inset-top)); transform:translateX(-50%); z-index:60; background:var(--bad); color:#fff;
+            padding:10px 16px; border-radius:999px; font-weight:600; font-size:14px; box-shadow:0 6px 24px var(--shadow); align-items:center; gap:10px; white-space:nowrap; }
+  body.offline .offbar { display:flex; }
+  body.offline #tab-main, body.offline #tab-setup { filter:grayscale(1); opacity:.4; pointer-events:none; user-select:none; }
+  .spin { width:14px; height:14px; border:2px solid #fff6; border-top-color:#fff; border-radius:50%; animation:spin .9s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  @media (max-width:720px) {
+    header { row-gap:6px; padding:8px 12px; padding-top:calc(8px + env(safe-area-inset-top)); gap:8px; }
+    header h1 { font-size:14px; } header h1 small { display:none; }
+    #status { order:3; flex:1 0 100%; }
+    .gear { order:2; } .hsec { order:2; padding:0 9px; } .hsec .lbl { display:none; } #fsBtn { margin-left:auto; order:1; } #chkAll { order:1; } #updAll { order:1; }
+    h1 { order:0; }
+    #app { padding-left:10px; padding-right:10px; }
+    .devs { grid-template-columns:1fr; }
+    .setup { flex-direction:column; align-items:stretch; gap:10px; }
+    .side { flex-direction:row; width:100%; flex:none; overflow-x:auto; position:static; scrollbar-width:none; gap:6px; }
+    .side::-webkit-scrollbar { display:none; }
+    .side button { flex:0 0 auto; min-height:38px; padding:6px 14px; border-radius:999px; background:var(--card2); font-size:14px; border:0; box-shadow:none; }
+    .side button.on { background:var(--acc); color:var(--onacc); box-shadow:none; }
+    .card { padding:12px; }
+    .set { padding:10px 0; gap:10px; flex-wrap:wrap; }
+    .sl { flex:1 1 100%; }
+    .sc { flex:1 1 100%; justify-content:flex-start; }
+    .sc input.txt { width:110px; font-size:16px; } .sc input.num { font-size:16px; } .sc input.wide { width:100%; font-size:16px; }
+    .sc button { min-height:38px; padding:6px 12px; font-size:15px; }
+    .sc .seg button { min-height:34px; padding:4px 10px; font-size:14px; }
+    .row button, .df button { min-height:34px; }
+    .set.feat { flex-wrap:nowrap; } .set.feat .sl { flex:1 1 0; } .set.feat .sc { flex:0 0 auto; }
+    body.in-setup #status { display:none; }
+  }
+
+  /* ===== additions (same as VoronMCP and LiveCompanion) ===== */
+  :root { --mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  #tab-main .devs { grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); max-width:1500px; }
+  .rv .warn2 { color:var(--warn); font-weight:600; }
+  @media (max-width:720px) { #tab-main .devs { grid-template-columns:1fr; } }
+  .dev.wide { grid-column:1/-1; }
+  .chip.w { background:color-mix(in srgb, var(--warn) 16%, transparent); color:var(--warn); }
+  .chip.b { background:color-mix(in srgb, var(--bad) 16%, transparent); color:var(--bad); }
+  .chip.o { background:color-mix(in srgb, var(--ok) 16%, transparent); color:var(--ok); }
+  .alist { display:flex; flex-direction:column; border-top:1px solid var(--line); }
+  .arow { display:grid; grid-template-columns:8px 1fr auto; gap:10px; align-items:center; padding:7px 0; border-bottom:1px solid var(--line); min-width:0; }
+  .arow:last-child { border-bottom:0; }
+  .an { min-width:0; }
+  .an b { font:600 12.5px/1.3 var(--mono); }
+  .an span { display:block; font:11.5px/1.35 var(--mono); color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .an .aerr { color:var(--bad); white-space:normal; overflow-wrap:anywhere; font-family:inherit; }
+  .aw { font-size:11px; color:var(--dim); text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .aw .chip { margin-left:4px; vertical-align:1px; }
+  .cmd { display:block; width:100%; margin:0; font:12px/1.45 var(--mono); background:var(--inset); color:var(--fg); border-radius:8px; padding:9px 10px; white-space:pre-wrap; overflow-wrap:anywhere; user-select:all; }
+  .cmd.dim { color:var(--dim); user-select:none; }
+  .copyrow { display:flex; gap:8px; align-items:flex-start; margin-top:6px; }
+  .copyrow .cmd { flex:1; min-width:0; }
+  .tl { display:flex; gap:10px; align-items:center; padding:7px 0; border-top:1px solid var(--line); font-size:13px; }
+  .tl b { font:600 12.5px var(--mono); min-width:0; overflow-wrap:anywhere; }
+  .tl span:not(.chip) { flex:1; color:var(--dim); font-size:12px; min-width:0; }
+  .tl .chip { flex:none; }
+  .tl.off { opacity:.45; }
+  ol.steps { margin:6px 0 2px; padding-left:20px; color:var(--dim); font-size:13px; }
+  ol.steps li { margin:4px 0; } ol.steps b { color:var(--fg); font-weight:600; }
+  .sub2 { font-weight:700; font-size:13px; margin:14px 0 2px; }
+  .sub2:first-of-type { margin-top:4px; }
+  /* ===== exposed mode: approvals, connections, events ===== */
+  #approvals:empty { display:none; }
+  #approvals { display:flex; flex-direction:column; gap:10px; margin-bottom:14px; }
+  .appr { background:var(--card); border:1px solid var(--warn); border-left:4px solid var(--warn); border-radius:12px; padding:14px; box-shadow:0 6px 24px var(--shadow); max-width:900px; }
+  .appr .ah { display:flex; gap:8px; align-items:center; font-weight:700; }
+  .appr .ah .tm { margin-left:auto; font-weight:400; font-size:12px; color:var(--dim); }
+  .appr .ab { display:flex; gap:16px; align-items:center; margin:10px 0; flex-wrap:wrap; }
+  .acode { font:700 28px/1 var(--mono); letter-spacing:.12em; background:var(--card2); border:1px solid var(--line); border-radius:9px; padding:10px 14px; }
+  .appr .ai2 { flex:1; min-width:200px; font-size:13px; color:var(--dim); } .appr .ai2 b { color:var(--fg); display:block; font-size:14px; }
+  .appr .af { display:flex; gap:8px; align-items:center; flex-wrap:wrap; } .appr .af .sp { flex:1; }
+  .conn { display:flex; gap:12px; align-items:center; padding:10px 0; border-top:1px solid var(--line); flex-wrap:wrap; }
+  .conn:first-child { border-top:0; } .conn .ci { flex:1; min-width:200px; } .conn .ci b { display:block; } .conn .ci span { font-size:12px; color:var(--dim); }
+  .chk { display:flex; gap:9px; align-items:flex-start; padding:6px 0; font-size:13px; }
+  .chk .ck { width:18px; height:18px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; background:var(--card2); color:var(--dim); margin-top:1px; }
+  .chk.ok .ck { background:var(--ok); color:var(--onacc); } .chk.bad .ck { background:var(--bad); color:#fff; }
+  .chk span small { display:block; color:var(--dim); font-size:12px; }
+  .ev .dot { margin-top:2px; }
+  #reviews:empty { display:none; }
+  #reviews { display:flex; flex-direction:column; gap:10px; margin-bottom:14px; }
+  .rev { background:var(--card); border:1px solid color-mix(in srgb, var(--acc) 60%, var(--line)); border-left:4px solid var(--acc); border-radius:12px; padding:14px; max-width:900px; }
+  .rev .ah { display:flex; gap:8px; align-items:center; font-weight:700; flex-wrap:wrap; }
+  .rev .ah .tm { margin-left:auto; font-weight:400; font-size:12px; color:var(--dim); }
+  .rev .ah .tm b { font-variant-numeric:tabular-nums; color:var(--fg); }
+  .rev .sub { font-size:13px; color:var(--dim); margin:4px 0 10px; }
+  .rev .af { display:flex; gap:8px; align-items:center; flex-wrap:wrap; } .rev .af .sp { flex:1; }
+  .chip.acc { background:color-mix(in srgb, var(--acc) 18%, transparent); color:var(--acc); }
+  .diff { margin:10px 0; background:var(--inset); border-radius:8px; padding:8px 0; font:12px/1.5 var(--mono); max-height:360px; overflow:auto; }
+  .diff div { padding:0 10px 0 26px; white-space:pre-wrap; overflow-wrap:anywhere; position:relative; }
+  .diff div::before { position:absolute; left:10px; color:var(--faint); }
+  .diff .a { background:color-mix(in srgb, var(--ok) 14%, transparent); } .diff .a::before { content:"+"; color:var(--ok); }
+  .diff .d { background:color-mix(in srgb, var(--bad) 14%, transparent); text-decoration:line-through; text-decoration-color:color-mix(in srgb, var(--bad) 50%, transparent); } .diff .d::before { content:"−"; color:var(--bad); }
+  .diff .gap { color:var(--faint); font-style:italic; }
+  .rhist { display:flex; gap:10px; align-items:center; padding:7px 0; border-top:1px solid var(--line); font-size:13px; }
+  .rhist:first-child { border-top:0; } .rhist span { flex:1; min-width:0; } .rhist small { color:var(--dim); }
+  .urgent { color:var(--bad); }
+  .appr .tm b { font-variant-numeric:tabular-nums; color:var(--fg); }
+  .appr .af select, .cspan select { max-width:150px; }
+  .acc-left { display:block; margin-top:2px; } .acc-left b { font-variant-numeric:tabular-nums; }
+  .qrwrap { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; margin:6px 0 4px; }
+  .qrwrap .qr { background:#fff; padding:6px; border-radius:10px; line-height:0; flex:none; }
+  .qrwrap .qr svg { width:220px; height:220px; }
+  .qrkey { font:600 15px/1.5 var(--mono); letter-spacing:.06em; background:var(--card2); padding:8px 10px; border-radius:8px; word-break:break-all; user-select:all; }
+  #totpCode { font:700 22px var(--mono); letter-spacing:.25em; width:150px; text-align:center; }
+  /* ===== setup guide: steps with their status down the left, one step at a time on the right ===== */
+  .side.wside { width:236px; flex:0 0 236px; gap:2px; }
+  .wzs { display:flex; align-items:flex-start; gap:10px; text-align:left; padding:8px 10px; position:relative; }
+  .wzs .num { width:24px; height:24px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center; font-size:11.5px; font-weight:800;
+              border:1.5px solid var(--line); background:var(--card2); color:var(--dim); }
+  .wzs .num svg { width:13px; height:13px; stroke:currentColor; stroke-width:3; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+  .wzs .wt { display:flex; flex-direction:column; min-width:0; padding-top:2px; }
+  .wzs .wt b { font-weight:600; color:var(--fg); font-size:13.5px; }
+  .wzs .wt small { font-size:11.5px; color:var(--dim); font-weight:400; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .wzs.done .num { background:var(--ok); border-color:var(--ok); color:var(--onacc); }
+  .wzs.bad .num { background:var(--bad); border-color:var(--bad); color:#fff; }
+  .wzs.bad .wt small { color:var(--bad); }
+  .wzs.skip .num { border-style:dashed; }
+  .wzs.on .num { border-color:var(--acc); color:var(--acc); }
+  .wzs.on.done .num { color:var(--onacc); }
+  .wzs:not(:last-child)::after { content:""; position:absolute; left:21px; top:34px; bottom:-8px; width:1.5px; background:var(--line); }
+  .wzs.done:not(:last-child)::after { background:color-mix(in srgb, var(--ok) 55%, var(--line)); }
+  .wzprog { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); font-weight:700; padding:2px 10px 10px; }
+  .card.wz { max-width:760px; padding:20px 22px; }
+  .wzk { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--acc); font-weight:700; }
+  .wz h3 { font-size:20px; margin:4px 0 8px; letter-spacing:-.01em; }
+  .wz p { margin:0 0 10px; color:var(--dim); font-size:14px; line-height:1.5; }
+  .wz p b { color:var(--fg); }
+  .wzbody { min-height:180px; }
+  .wzf { display:flex; gap:8px; align-items:center; margin-top:18px; padding-top:14px; border-top:1px solid var(--line); }
+  .wzf .sp { flex:1; }
+  .wzf button { padding:8px 16px; }
+  .wzf .on { padding:8px 20px; }
+  .picks { display:grid; gap:8px; margin:6px 0 12px; }
+  .pick { display:flex; gap:12px; align-items:flex-start; text-align:left; border:1px solid var(--line); background:var(--card2); border-radius:10px; padding:12px 14px; font-weight:400; }
+  .pick:hover { background:color-mix(in srgb, var(--card2) 80%, var(--fg) 6%); }
+  button.pick.on, button.pick.on:hover { border-color:var(--acc); background:color-mix(in srgb, var(--acc) 12%, var(--card2)); color:var(--fg); box-shadow:inset 0 0 0 1px var(--acc); }
+  .pick .rb { width:18px; height:18px; border-radius:50%; border:2px solid var(--faint); flex:none; margin-top:1px; }
+  .pick.on .rb { border-color:var(--acc); background:radial-gradient(var(--acc) 0 4px, transparent 5px); }
+  .pick b { display:block; font-weight:700; font-size:14px; }
+  .pick span { display:block; color:var(--dim); font-size:12.5px; margin-top:2px; line-height:1.4; }
+  .pick .tag2 { display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ok); margin-left:6px; }
+  .waitbox { display:flex; align-items:center; gap:10px; border:1px dashed color-mix(in srgb, var(--acc) 55%, transparent); border-radius:8px; padding:10px 12px; font-size:13px; color:var(--dim); margin-top:12px; }
+  .waitbox .spin { border-color:color-mix(in srgb, var(--acc) 30%, transparent); border-top-color:var(--acc); flex:none; }
+  .wz .okbox, .wz .errbox { margin-top:10px; font-size:13px; padding:9px 12px; }
+  .wz .set { padding:9px 0; }
+  .sumrow { display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--line); font-size:13.5px; }
+  .sumrow.wzs::after { display:none; }
+  .sumrow:first-child { border-top:0; } .sumrow span { flex:1; } .sumrow small { color:var(--dim); }
+  @media (max-width:720px) {
+    .side.wside { width:100%; flex:none; }
+    .wzs { padding:6px 12px 6px 6px; align-items:center; }
+    .wzs .wt small { display:none; }
+    .wzs::after { display:none; }
+    .wzprog { display:none; }
+    .card.wz { padding:16px; }
+    .wzf { position:sticky; bottom:0; background:var(--card); padding-bottom:calc(10px + env(safe-area-inset-bottom)); }
+  }
+  .rv code, .note code, ol.steps code { font:12px var(--mono); background:var(--card2); padding:1px 5px; border-radius:5px; color:var(--fg); }
+  .an .chip { display:inline-block; font:700 10px/1.5 system-ui, -apple-system, sans-serif; letter-spacing:.06em; white-space:nowrap; overflow:visible; vertical-align:1px; margin-left:4px; }
+  .connbox { margin-top:4px; }
+  .connbox .sub2 { margin-top:10px; }
+  /* ===== the printer card ===== */
+  .pbar { height:6px; background:var(--card2); border-radius:3px; overflow:hidden; margin-top:5px; }
+  .pbar i { display:block; height:100%; background:var(--acc); border-radius:3px; }
+  .pbar.paused i { background:var(--warn); }
+  .df .sp { flex:1; }
+  .df.stoprow { border-top:1px solid var(--line); padding-top:9px; }
+  button.estop { background:var(--bad); color:#fff; padding:6px 14px; }
+  button.estop:hover { background:color-mix(in srgb, var(--bad) 85%, #000 15%); }
+  .lims { display:inline-flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .lims label { font-size:12px; color:var(--dim); display:inline-flex; gap:5px; align-items:center; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>VoronMCP <span class="ver" id="hVer"></span><small>Claude bridge for Klipper</small></h1>
+  <div id="status"></div>
+  <button id="chkAll" class="gear" title="Check the printer now" aria-label="Check the printer now"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg></button>
+  <button id="fsBtn" class="gear" title="Full screen" aria-label="Full screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  <button id="secBtn" class="hsec" title="Security" aria-label="Security"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.4 8-8 9-4.6-1-8-4-8-9V6z"/><rect x="9" y="11" width="6" height="5" rx="1"/><path d="M10.5 11V9.5a1.5 1.5 0 0 1 3 0V11"/></svg><span class="lbl">Security</span><b class="badge hide" id="secBadge"></b></button>
+  <button id="gear" class="gear" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Done</span></button>
+</header>
+<div class="offbar"><span class="spin"></span>Lost connection to VoronMCP. Retrying…</div>
+
+<div id="app">
+<div id="approvals"></div>
+<div id="reviews"></div>
+<section id="tab-main">
+  <div id="alerts"></div>
+  <div class="devs">
+    <div class="dev none" id="prCard">
+      <div class="dh"><span class="dot" id="prDot"></span><div class="dn" id="prName">Printer</div></div>
+      <div class="dsub" id="prSub"></div>
+      <div class="rows" id="prRows"></div>
+      <div class="df"><span class="when" id="prWhen"></span><button id="prTest">Test now</button></div>
+      <div class="df stoprow" id="prActs"><button id="prRestart">Restart Klipper</button><button id="prFw">Firmware restart</button><span class="sp"></span><button id="prStop" class="estop">Emergency stop</button></div>
+    </div>
+    <div class="dev none" id="accCard">
+      <div class="dh"><span class="dot" id="accDot"></span><div class="dn">Claude access</div><div class="seg" id="accSeg"><button data-v="1">On</button><button data-v="0">Off</button></div></div>
+      <div class="dsub" id="accSub"></div>
+      <div class="rows" id="accRows"></div>
+      <div class="df"><span class="when" id="accWhen"></span><button id="permBtn">Permissions</button><button id="connBtn" class="on">Connect Claude</button></div>
+    </div>
+    <div class="dev none" id="sysCard">
+      <div class="dh"><span class="dot" id="sysDot"></span><div class="dn">System</div></div>
+      <div class="dsub" id="sysSub"></div>
+      <div class="rows" id="sysRows"></div>
+      <div class="df"><span class="when" id="sysWhen"></span><button id="sysTest">Check now</button></div>
+    </div>
+    <div class="dev wide none" id="actCard">
+      <div class="dh"><span class="dot acc"></span><div class="dn">Recent activity</div><button class="link" id="actAll">All activity</button></div>
+      <div class="alist" id="actList"></div>
+    </div>
+  </div>
+</section>
+
+<section id="tab-wizard" class="hide">
+ <div class="setup">
+  <div class="side wside" id="wzSide"></div>
+  <div class="pane"><div class="card wz" id="wzPane"></div></div>
+ </div>
+</section>
+
+<section id="tab-security" class="hide">
+ <div class="secwrap">
+      <div class="note pnote"><b>Local only:</b> VoronMCP answers only on your network. <b>Exposed:</b> claude.ai and the Claude phone app can reach it through your reverse proxy. Claude signs in, you approve each connection here at home, and this page stays private.</div>
+      <div class="card">
+        <h2>Mode</h2>
+        <div class="set first"><div class="sl"><b>Where Claude can reach VoronMCP</b><span id="secModeNote"></span></div><div class="sc"><div class="seg" id="secMode"><button data-v="local">Local only</button><button data-v="exposed">Exposed</button></div></div></div>
+        <div id="secReq"></div>
+      </div>
+      <div class="card">
+        <h2>Public address</h2>
+        <div class="set first"><div class="sl"><b>Address</b><span>The https address your reverse proxy answers on, with nothing after the host name</span></div><div class="sc"><input id="secPub" class="txt wide" placeholder="https://voronmcp.example.com" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Public address"><button id="secPubSave" class="on">Save</button></div></div>
+        <div class="set"><div class="sl"><b>Check the proxy</b><span>VoronMCP calls its own public address to confirm it reaches the public port, and that this page and its settings cannot be reached from outside</span></div><div class="sc"><button id="secTest">Test</button></div></div>
+        <div id="secTestOut"></div>
+      </div>
+      <div class="card"><h2>Reverse proxy</h2><div id="secProxy"></div></div>
+      <div class="card"><h2>Connections from outside</h2>
+        <div class="set first"><div class="sl"><b>Access time for new connections</b><span>Preselected when you approve (you can change it each time), and used for approvals with an authenticator code. When it runs out, Claude has to sign in and be approved again</span></div><div class="sc"><select id="secSpan" aria-label="Default access time"></select></div></div>
+        <div id="secConns"></div>
+        <div class="set"><div class="sl"><span>Revoking cuts a connection off at once. Claude has to sign in again, and you approve it again.</span></div><div class="sc"><button id="secRevokeAll" class="danger">Revoke all</button></div></div>
+      </div>
+      <div class="card">
+        <h2>Approve with an authenticator code</h2>
+        <div class="note" style="margin-bottom:6px">Lets you approve a new Claude connection from anywhere: Claude's sign-in page also accepts the 6-digit code from your authenticator app (Google or Microsoft Authenticator, 1Password, Authy, the iPhone Passwords app).</div>
+        <div id="totpBox"></div>
+      </div>
+      <div class="card">
+        <h2>Access token from outside</h2>
+        <div class="set first"><div class="sl"><b>Accept the access token over the public address</b><span>Off (recommended): only signed-in, approved connections work from outside. On: apps that send the token as a header work too, at the level set under Permissions</span></div><div class="sc"><div class="seg" id="secTokRemote"><button data-v="1">On</button><button data-v="0">Off</button></div></div></div>
+      </div>
+      <div class="card"><h2>Encryption</h2><div id="secKey"></div></div>
+      <div class="card"><h2>Security events</h2><div class="alist" id="secEvents"></div>
+        <div class="set"><div class="sl"></div><div class="sc"><button id="secClear" class="danger">Clear</button></div></div>
+      </div>
+
+ </div>
+</section>
+
+<section id="tab-setup" class="hide">
+ <div class="setup">
+  <div class="side" id="sub">
+    <button data-sub="printer" class="on"><svg viewBox="0 0 24 24"><path d="M4 3h16v18H4zM4 7h16M8 11h8M10 11v4h4v-4M12 15v2"/></svg><span>Printer</span></button>
+    <button data-sub="claude"><svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg><span>Connect Claude</span></button>
+    <button data-sub="perm"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.4 8-8 9-4.6-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span>Permissions</span></button>
+    <button data-sub="backups"><svg viewBox="0 0 24 24"><path d="M21 8v12H3V8M1 3h22v5H1zM10 12h4"/></svg><span>Backups</span></button>
+    <button data-sub="activity"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Activity</span></button>
+    <button data-sub="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span>Settings</span></button>
+  </div>
+  <div class="pane">
+
+    <div data-pane="printer">
+      <div class="note pnote">VoronMCP talks to the printer through Moonraker's own API, the same one Mainsail and Fluidd use. Nothing is installed on the printer.</div>
+      <div class="card">
+        <h2>Printer</h2>
+        <div class="set first"><div class="sl"><b>Name</b><span>Shown on this page and to Claude</span></div><div class="sc"><input id="prNameIn" class="txt wide" maxlength="40" spellcheck="false" autocomplete="off" aria-label="Printer name"></div></div>
+        <div class="set"><div class="sl"><b>Moonraker address</b><span>The printer's IP address and Moonraker's port, for example http://192.168.1.50:7125. Names ending in .local usually do not work from inside a container</span></div><div class="sc"><input id="prUrl" class="txt wide" placeholder="http://192.168.1.50:7125" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Moonraker address"></div></div>
+        <div class="set"><div class="sl"><b>API key</b><span id="prKeyNote">Optional. Not needed when VoronMCP's machine is in trusted_clients</span></div><div class="sc"><input id="prKey" class="txt wide" type="password" autocomplete="new-password" spellcheck="false" aria-label="API key"><button id="prKeyClear" class="danger hide">Remove</button></div></div>
+        <div id="prErr" class="formerr hide"></div>
+        <div class="set"><div class="sl"><b>Status</b><span id="prStat"></span></div><div class="sc"><button id="prTest2">Test</button><button id="prSave" class="on">Save</button></div></div>
+      </div>
+      <div class="card">
+        <h2>Letting VoronMCP in</h2>
+        <div class="note">Moonraker only answers machines it trusts. Do one of these:</div>
+        <div class="sub2">Trust VoronMCP's machine</div>
+        <ol class="steps">
+          <li>In Mainsail or Fluidd, open the config files and edit <code>moonraker.conf</code>.</li>
+          <li>Under <code>[authorization]</code>, add the IP address of the machine VoronMCP runs on to <code>trusted_clients</code>, for example <code>192.168.1.20</code> (or your whole network, like <code>192.168.1.0/24</code>).</li>
+          <li>Save and restart Moonraker.</li>
+        </ol>
+        <div class="sub2">Or use an API key</div>
+        <ol class="steps">
+          <li>Find Moonraker's API key: Fluidd shows it under <b>Settings &gt; Authentication</b>; from a trusted computer you can also open <code>http://&lt;printer IP&gt;:7125/access/api_key</code>.</li>
+          <li>Paste it above and press <b>Save</b>. VoronMCP keeps it encrypted and never shows it again.</li>
+        </ol>
+        <div class="note" style="margin-top:8px">Use the printer's IP address, not a name like <code>voron.local</code>. A fixed address (a DHCP reservation in your router) keeps it from changing.</div>
+      </div>
+    </div>
+
+    <div data-pane="claude" class="hide">
+      <div class="note pnote">Claude reaches VoronMCP at <code>/mcp</code> with an access token. Anyone with the token can use what Permissions allows, so treat it like a password.</div>
+      <div class="card">
+        <h2>Access token</h2>
+        <div class="set first"><div class="sl"><b>Token</b><span id="tokNote">Hidden. Show it to copy the connection details below</span></div><div class="sc"><button id="tokShow">Show</button><button id="tokNew" class="danger">New token</button></div></div>
+      </div>
+      <div class="card">
+        <h2>Claude Code on a computer</h2>
+        <div class="note">On a Mac or PC on this network, run this once in Terminal. Claude Code then has the printer tools in every project.</div>
+        <div class="copyrow"><pre class="cmd dim" id="cmdCode">Show the token first</pre><button data-copy="cmdCode">Copy</button></div>
+        <div class="note" style="margin-top:8px">Check it with <code>claude mcp list</code>. To remove it: <code>claude mcp remove voronmcp</code>.</div>
+      </div>
+      <div class="card">
+        <h2>claude.ai, Claude Desktop and the phone app</h2>
+        <div id="webConn"></div>
+      </div>
+      <div class="card">
+        <h2>Try it</h2>
+        <div class="note" id="tryNote"></div>
+      </div>
+    </div>
+
+    <div data-pane="perm" class="hide">
+      <div class="note pnote">Everything Claude may do, in one place: one set of levels, given to Claude on your network and to each connection from outside. These rules are checked in VoronMCP before anything reaches the printer, so they hold whatever Claude asks for. How Claude gets in (sign-in, access time, revoking) is in the Security tab.</div>
+      <div class="card">
+        <h2>Claude access</h2>
+        <div class="set first"><div class="sl"><b>Allow Claude to connect</b><span>Off refuses every request, without changing the token</span></div><div class="sc"><div class="seg" id="pEnabled"><button data-v="1">On</button><button data-v="0">Off</button></div></div></div>
+      </div>
+      <div class="card">
+        <h2>Levels</h2>
+        <div id="lvlTable"></div>
+      </div>
+      <div class="card">
+        <h2>Who may do what</h2>
+        <div id="whoBox"></div>
+      </div>
+      <div class="card">
+        <h2>Review Claude's changes</h2>
+        <div class="set first"><div class="sl"><b>Ask me to keep or revert</b><span>Each change to a config file is saved at once (Klipper uses it after its next restart), is backed up, and waits on the dashboard for Keep or Revert. Revert puts back the version from before Claude's first change</span></div><div class="sc"><div class="seg" id="rvOn"><button data-v="1">On</button><button data-v="0">Off</button></div></div></div>
+        <div class="set"><div class="sl"><b>If I don't answer within</b><span>Like a display-settings check: no answer, and the change is decided for you</span></div><div class="sc"><select id="rvTime" aria-label="Time to answer"><option value="0">No limit (wait for me)</option><option value="15">15 minutes</option><option value="60">1 hour</option><option value="240">4 hours</option><option value="1440">24 hours</option></select><div class="seg" id="rvWhat"><button data-v="revert">Revert it</button><button data-v="keep">Keep it</button></div></div></div>
+      </div>
+      <div class="card">
+        <h2>Safety rules</h2>
+        <div class="set first"><div class="sl"><b>Blocked G-code commands</b><span>G-code from Claude that contains these is refused at every level. Macros already on the printer still run as they are written. Default: FORCE_MOVE, SET_KINEMATIC_POSITION, M302 (cold extrusion), RUN_SHELL_COMMAND</span></div><div class="sc"><input id="pBlocked" class="txt wide" spellcheck="false" autocomplete="off" autocapitalize="characters" aria-label="Blocked G-code commands"><button id="pBlockedSave" class="on">Save</button></div></div>
+        <div class="set"><div class="sl"><b>Protected files</b><span>Claude can read these but never change or delete them. Paths in the config folder, for example moonraker.conf or macros/start.cfg. Default: moonraker.conf</span></div><div class="sc"><input id="pProt" class="txt wide" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Protected files"><button id="pProtSave" class="on">Save</button></div></div>
+        <div class="set"><div class="sl"><b>Temperature limits</b><span>Heater targets above these are refused, whatever Claude asks for. Other covers chamber and any other heater. Default: 300, 120 and 80 °C</span></div><div class="sc"><span class="lims"><label>Hotend <input id="pLimH" class="num" type="number" min="0" max="500" aria-label="Hotend limit"></label><label>Bed <input id="pLimB" class="num" type="number" min="0" max="500" aria-label="Bed limit"></label><label>Other <input id="pLimO" class="num" type="number" min="0" max="500" aria-label="Other heater limit"></label><span class="to">°C</span></span><button id="pLimSave" class="on">Save</button></div></div>
+        <div class="note" style="margin-top:6px">Also always on: while a print is running or paused, only live tuning is allowed (speed and flow, pressure advance, small Z offset steps, fans, temperatures within the limits). Claude cannot add <code>[gcode_shell_command]</code> sections, and the SAVE_CONFIG block at the end of printer.cfg is only changed when you ask for it.</div>
+      </div>
+      <div class="card">
+        <h2>Tools Claude sees</h2>
+        <div id="toolList"></div>
+      </div>
+    </div>
+
+    <div data-pane="backups" class="hide">
+      <div class="note pnote">Before Claude changes or deletes a config file, VoronMCP saves the old version here. Restore puts it back on the printer (and saves the current one first). Restart Klipper afterwards for it to take effect.</div>
+      <div class="card"><h2>Backups</h2><div id="bkList"><div class="note">Loading…</div></div></div>
+    </div>
+
+    <div data-pane="activity" class="hide">
+      <div class="card"><h2>Reviewed changes</h2><div id="rvHist"></div></div>
+      <div class="card"><h2>Everything Claude asked for</h2><div class="note" id="actNote" style="margin-bottom:6px"></div><div class="alist" id="actFull"></div>
+        <div class="set"><div class="sl"></div><div class="sc"><button id="actClear" class="danger">Clear</button></div></div>
+      </div>
+    </div>
+
+    <div data-pane="settings" class="hide">
+      <div class="note pnote">Display settings are saved on this device. The rest is saved on the server.</div>
+      <div class="card">
+        <h2>Appearance</h2>
+        <div class="set first"><div class="sl"><b>Theme</b><span>Auto follows this device</span></div><div class="sc"><div class="seg" id="themeSeg"><button data-v="auto">Auto</button><button data-v="dark">Dark</button><button data-v="light">Light</button></div></div></div>
+      </div>
+      <div class="card">
+        <h2>Backups</h2>
+        <div class="set first"><div class="sl"><b>Keep</b><span>Newest backups per config file</span></div><div class="sc"><input id="bkKeep" class="num" type="number" min="1" max="200" aria-label="Backups to keep"></div></div>
+      </div>
+      <div class="card">
+        <h2>Control</h2>
+        <div class="set first"><div class="sl"><b>Control PIN</b><span id="pinNote"></span></div><div class="sc"><input id="pinNew" class="txt" type="password" autocomplete="new-password" placeholder="New PIN" aria-label="New PIN"><button id="pinSet" class="on">Set</button><button id="pinRm" class="danger hide">Remove</button></div></div>
+      </div>
+      <div class="card">
+        <h2>About</h2>
+        <div class="set first"><div class="sl"><b>Version</b></div><div class="sc"><span class="val" id="verVal"></span></div></div>
+        <div class="set"><div class="sl"><b>Setup guide</b><span>Walk through connecting the printer and Claude again, step by step</span></div><div class="sc"><button id="wzAgain">Open the guide</button></div></div>
+        <div class="set" id="updRow"><div class="sl"><b>Updates</b><span id="updNote"></span></div><div class="sc"><button id="updBtn">Check now</button></div></div>
+        <div class="set hide" id="updHow"><div class="sl"><b>To update</b><span>TrueNAS pulls the newest image when the app is restarted (pull policy always). Or set the image to this</span></div><div class="sc"><input id="updImg" class="txt wide" readonly spellcheck="false" aria-label="New image name"></div></div>
+        <div class="set"><div class="sl"><b>Mode</b><span id="modeNote"></span></div><div class="sc"><span class="val" id="modeVal"></span></div></div>
+      </div>
+    </div>
+
+  </div>
+ </div>
+</section>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<div id="modalHost"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
+  function ago(t) {
+    if (!t) return 'never';
+    var s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    if (s < 45) return 'just now';
+    if (s < 3600) return Math.round(s / 60) + ' min ago';
+    if (s < 86400) return Math.round(s / 3600) + ' h ago';
+    return Math.round(s / 86400) + ' d ago';
+  }
+  function when(t) { var d = new Date(t); return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+
+  // ---------- saved on this device ----------
+  var SUBS = ['printer', 'claude', 'perm', 'backups', 'activity', 'settings'];
+  var themePref = 'auto', subPane = 'printer';
+  try { themePref = localStorage.getItem('vm-theme') || 'auto'; } catch (e) {}
+  try { subPane = localStorage.getItem('vm-sub') || 'printer'; } catch (e) {}
+  if (['auto', 'dark', 'light'].indexOf(themePref) < 0) themePref = 'auto';
+  if (SUBS.indexOf(subPane) < 0) subPane = 'printer';
+
+  // ---------- state ----------
+  var snap = null, lastMsg = 0, pin = '', inSetup = false, inWizard = false, inSecurity = false, token = '';
+  try { pin = sessionStorage.getItem('vm-pin') || ''; } catch (e) {}
+  var prLoaded = false, pubLoaded = false, blkLoaded = false, keepLoaded = false, bkSig = null, apSig = '', apScope = {}, connSig = '';
+
+  var toastEl = $('#toast'), toastTimer;
+  function toast(msg, good) {
+    toastEl.textContent = msg; toastEl.className = 'toast show' + (good ? ' good' : '');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { toastEl.className = 'toast'; }, 4500);
+  }
+
+  // ---------- talking to the server ----------
+  // Every change goes through api(): it asks for the PIN when one is set, and asks again if it was wrong.
+  function api(path, body, retried) {
+    if (snap && snap.pinRequired && !pin) {
+      var p = prompt('Control PIN');
+      if (p == null) return Promise.resolve({ ok: false, cancelled: true });
+      pin = p; try { sessionStorage.setItem('vm-pin', pin); } catch (e) {}
+    }
+    return fetch(path, { method: 'POST', headers: { 'content-type': 'application/json', 'x-pin': pin }, body: JSON.stringify(body || {}) })
+      .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j }; }); })
+      .then(function (res) {
+        if (res.status === 401) {
+          pin = ''; try { sessionStorage.removeItem('vm-pin'); } catch (e) {}
+          if (!retried) return api(path, body, true);
+        }
+        return res.j;
+      })
+      .catch(function () { return { ok: false, error: 'Could not reach VoronMCP' }; });
+  }
+  function report(j, fallback) { if (!j.ok && !j.cancelled) toast(j.error || fallback); return j; }
+
+  // ---------- theme ----------
+  var mq = window.matchMedia ? matchMedia('(prefers-color-scheme: light)') : null;
+  function applyTheme() {
+    var light = themePref === 'light' || (themePref === 'auto' && mq && mq.matches);
+    document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+  }
+  if (mq && mq.addEventListener) mq.addEventListener('change', function () { if (themePref === 'auto') applyTheme(); });
+
+  function paintSeg(el, v) { $$('button', el).forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); }); }
+
+  // ---------- windows ----------
+  var host = $('#modalHost');
+  function closeModal() { host.innerHTML = ''; document.removeEventListener('keydown', escKey); }
+  function escKey(e) { if (e.key === 'Escape') closeModal(); }
+  function openModal(html, big) {
+    host.innerHTML = '<div class="scrim"><div class="modal' + (big ? ' big' : '') + '" role="dialog" aria-modal="true">' + html + '</div></div>';
+    $('.scrim', host).addEventListener('mousedown', function (e) { if (e.target.classList.contains('scrim')) closeModal(); });
+    document.addEventListener('keydown', escKey);
+    return $('.modal', host);
+  }
+  function confirmBox(title, text, goLabel, danger) {
+    return new Promise(function (resolve) {
+      var m = openModal('<div class="mh">' + esc(title) + '</div><div class="mb">' + text + '</div><div class="mf"><button id="mNo">Cancel</button><button id="mYes" class="on' + (danger ? ' danger' : '') + '">' + esc(goLabel) + '</button></div>');
+      $('#mNo', m).onclick = function () { closeModal(); resolve(false); };
+      $('#mYes', m).onclick = function () { closeModal(); resolve(true); };
+    });
+  }
+
+  // ---------- connection details ----------
+  function mcpBase() { return location.protocol + '//' + location.host; }
+  function codeCmd(t) { return 'claude mcp add --transport http voronmcp ' + mcpBase() + '/mcp --header "Authorization: Bearer ' + t + '"'; }
+  function connUrl() { return snap && snap.publicUrl ? snap.publicUrl + '/mcp' : ''; }
+  var TRY = ['Use VoronMCP to check my toolhead\'s CAN link health.', 'My last print stopped with Timer too close. Find out why.', 'Review my printer.cfg for problems and suggest improvements.', 'Tune my pressure advance.'];
+  function tryHtml() { return 'Ask Claude: ' + TRY.map(function (t) { return '<b>"' + esc(t) + '"</b>'; }).join(', '); }
+  /** How to add VoronMCP to claude.ai and the phone app; depends on the mode. */
+  function webSteps(s, pre) {
+    var sec = s.security || {}, u = connUrl();
+    if (sec.mode !== 'exposed' || !u) {
+      return '<p class="note" style="margin:0 0 8px">claude.ai, Claude Desktop and the phone app connect from Anthropic\'s servers, not from your device, so VoronMCP has to be reachable from the internet. That is <b>exposed mode</b>: a reverse proxy (such as a Cloudflare Tunnel) in front of VoronMCP\'s public port, with Claude signing in and you approving each connection here.</p>' +
+        '<button class="on" data-gosec>Set up exposed mode</button>';
+    }
+    return '<ol class="steps"><li>On claude.ai, open <b>Customize &gt; Connectors</b>, choose <b>+ Add</b>, then <b>Add custom connector</b>. Name it <b>VoronMCP</b>.</li><li>Paste this URL:</li></ol>' +
+      '<div class="copyrow"><pre class="cmd" id="' + pre + 'Url">' + esc(u) + '</pre><button data-copy="' + pre + 'Url">Copy</button></div>' +
+      '<ol class="steps" start="3"><li>Leave Authentication on its default sign-in, and choose <b>Add</b>, then <b>Connect</b>.</li>' +
+      '<li>A VoronMCP page opens with a code like <b>K7Q-2XM</b>. An approval with the same code appears at the top of this page. Check the codes match, choose what Claude may do, and approve.' +
+        (sec.totp && sec.totp.enabled && !sec.totp.off ? ' Away from home, type your authenticator code on that page instead.' : '') + '</li>' +
+      '<li>The connector then works in Claude Desktop and the phone app too.</li></ol>' +
+      (sec.allowTokenRemote ? '<div class="note" style="margin-top:8px">Access token from outside is on, so an app can also use <b>No sign in</b> with the request header <code>Authorization: Bearer &lt;token&gt;</code>.</div>' : '');
+  }
+  document.addEventListener('click', function (e) { if (e.target.closest('[data-gosec]')) { closeModal(); openSecurity(); } });
+  function fillConnect(root) {
+    var a = $('#cmdCode', root);
+    if (a) { a.textContent = token ? codeCmd(token) : 'Show the token first'; a.classList.toggle('dim', !token); }
+    var n = $('#tokNote');
+    if (n) n.textContent = token ? 'Shown below. It stays on this page until you reload' : 'Hidden. Show it to copy the connection details below';
+  }
+  function getToken() {
+    if (token) return Promise.resolve(token);
+    return api('api/token', {}).then(function (j) { if (j.ok) { token = j.token; fillConnect(document); } else report(j, 'Could not get the token'); return token; });
+  }
+  function copyFrom(id, root) {
+    var el = $('#' + id, root || document);
+    if (!el || el.classList.contains('dim')) { toast('Nothing to copy yet'); return; }
+    var text = el.textContent;
+    var done = function () { toast('Copied', true); };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, function () { selectText(el); });
+    else { selectText(el); try { document.execCommand('copy'); done(); } catch (e) { toast('Select the text and copy it'); } }
+  }
+  function selectText(el) { var r = document.createRange(); r.selectNodeContents(el); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  document.addEventListener('click', function (e) { var b = e.target.closest('[data-copy]'); if (b) copyFrom(b.dataset.copy, b.closest('.modal') || document); });
+
+  function connectHtml(t) {
+    return '<div class="connbox">' +
+      '<div class="sub2">Claude Code on a computer on this network</div><div class="note">Run once in Terminal:</div>' +
+      '<div class="copyrow"><pre class="cmd" id="cmdCodeM">' + esc(codeCmd(t)) + '</pre><button data-copy="cmdCodeM">Copy</button></div>' +
+      '<div class="sub2">claude.ai, Claude Desktop and the phone app</div>' + webSteps(snap, 'm') +
+      '<div class="sub2">Try it</div><div class="note">' + tryHtml() + '</div></div>';
+  }
+  function openConnect() {
+    getToken().then(function (t) {
+      if (!t) return;
+      var m = openModal('<div class="mh">Connect Claude</div><div class="mb">' + connectHtml(t) +
+        '</div><div class="mf"><button id="mMore">More options</button><span class="sp"></span><button id="mClose" class="on">Done</button></div>', true);
+      $('#mClose', m).onclick = closeModal;
+      $('#mMore', m).onclick = function () { closeModal(); showTab(true); showSub('claude'); };
+    });
+  }
+
+  // ---------- dashboard ----------
+  function row(label, value) { return '<div class="row"><div class="rl">' + esc(label) + '</div><div class="rv">' + value + '</div><div></div></div>'; }
+  function chips(list) { return '<div class="chips">' + list.map(function (c) { return '<span class="chip ' + (c[1] || '') + '">' + esc(c[0]) + '</span>'; }).join('') + '</div>'; }
+  var LVL = [['read', 'Look only', 'Read status, logs (klippy.log analysis, CAN and MCU link health), config files, macros, temperatures, bed mesh, print history and a webcam snapshot. Change nothing.'],
+    ['build', 'Help build', 'Also change config files (backed up, keep or revert), restart Klipper or do a firmware restart, and SAVE_CONFIG. Never while a print is running.'],
+    ['hands', 'Hands on', 'Also run G-code: moves, heating, homing, QGL and calibrations like input shaper and PID. Pause, resume, cancel and start prints, emergency stop. While printing, only live tuning is allowed.'],
+    ['full', 'Full', 'Also delete files and restart services. Only on your network, never from outside.']];
+  var LVL_NAME = { read: 'Look only', build: 'Help build', hands: 'Hands on', full: 'Full' };
+  function modeText(a) { return a.enabled ? LVL_NAME[a.local] || 'Look only' : 'Off'; }
+
+  function actRows(list, max) {
+    if (!list.length) return '<div class="note" style="padding:12px 0">Nothing yet. When Claude uses VoronMCP, every request shows up here.</div>';
+    return list.slice(0, max).map(function (a) {
+      return '<div class="arow"><span class="dot ' + (a.ok ? 'ok' : 'bad') + '"></span><div class="an"><b>' + esc(a.tool) + '</b>' + (a.who ? ' <small style="color:var(--dim)">' + esc(a.who) + (a.remote ? ' · outside' : '') + '</small>' : '') + (a.args ? '<span title="' + esc(a.args) + '">' + esc(a.args) + '</span>' : '') +
+        (a.error ? '<span class="aerr">' + esc(a.error) + '</span>' : '') + '</div><div class="aw">' + esc(ago(a.t)) + (a.ms ? ' · ' + a.ms + ' ms' : '') + (a.write ? '<span class="chip w">change</span>' : '') + '</div></div>';
+    }).join('');
+  }
+
+  // ---------- the printer ----------
+  function pst(s) { return (s.printer && s.printer.status) || {}; }
+  function busyPrint(st) { return !!(st.print && (st.print.state === 'printing' || st.print.state === 'paused')); }
+  function klippyBad(st) { return st.ok && ['shutdown', 'error', 'disconnected'].indexOf(st.klippy) >= 0; }
+  var KLIPPY = { ready: 'Ready', startup: 'Starting', shutdown: 'Shutdown', error: 'Error', disconnected: 'Disconnected from Moonraker' };
+  var PSTATE = { standby: 'Idle', printing: 'Printing', paused: 'Paused', complete: 'Finished', cancelled: 'Cancelled', error: 'Stopped with an error' };
+  function dur(sec) { sec = Math.max(0, Math.round(sec || 0)); var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60); return h ? h + ' h ' + m + ' min' : m + ' min'; }
+  function deg(v) { return v == null ? '–' : (Math.round(v * 10) / 10).toFixed(1); }
+  function tempHtml(t) {
+    if (!t) return '–';
+    return esc(deg(t[0])) + (t[1] ? ' / ' + esc(Math.round(t[1])) + ' °C' : ' °C <small>heater off</small>');
+  }
+  function klippyHtml(st) {
+    var k = st.klippy || '', name = KLIPPY[k] || k || 'Unknown';
+    var cls = k === 'ready' ? 'good' : k === 'startup' ? 'warn2' : 'bad';
+    return '<span class="' + cls + '">' + esc(name) + '</span>' + (st.message && k !== 'ready' ? '<small>' + esc(st.message) + '</small>' : '');
+  }
+  function printerStatText(st) {
+    if (!st.configured) return 'Not set up yet';
+    if (st.checking && !st.ok) return 'Checking…';
+    if (!st.ok) return '<span style="color:var(--bad)">' + esc(st.error || 'Not reachable') + '</span>';
+    return '<span style="color:' + (st.klippy === 'ready' ? 'var(--ok)' : klippyBad(st) ? 'var(--bad)' : 'var(--warn)') + '">Connected' + (st.hostname ? ' to ' + esc(st.hostname) : '') + ' · Klipper ' + esc((KLIPPY[st.klippy] || st.klippy || '').toLowerCase()) + '</span>' + (st.moonraker ? ' · Moonraker ' + esc(st.moonraker) : '');
+  }
+
+  function renderHeader(s) {
+    $('#hVer').textContent = 'v' + s.version;
+    var st = pst(s), a = s.access, out = [], nm = s.printer.name || 'Printer';
+    if (!st.configured) out.push('<span class="st warn"><span class="dot warn"></span>Printer not set up</span>');
+    else if (!st.ok) out.push('<span class="st bad"><span class="dot bad"></span>' + esc(nm) + ' unreachable</span>');
+    else if (klippyBad(st)) out.push('<span class="st bad"><span class="dot bad"></span>Klipper ' + esc((KLIPPY[st.klippy] || st.klippy).toLowerCase()) + '</span>');
+    else if (st.klippy !== 'ready') out.push('<span class="st warn"><span class="dot warn"></span>Klipper ' + esc((KLIPPY[st.klippy] || st.klippy || '').toLowerCase()) + '</span>');
+    else if (busyPrint(st)) out.push('<span class="st ' + (st.print.state === 'paused' ? 'warn' : '') + '"' + (st.print.state === 'paused' ? '' : ' style="color:var(--acc)"') + '><span class="dot ' + (st.print.state === 'paused' ? 'warn' : 'acc') + '"></span>' + esc(PSTATE[st.print.state]) + (st.print.progress != null ? ' ' + esc(st.print.progress) + '%' : '') + '</span>');
+    else out.push('<span class="st ok"><span class="dot ok"></span>' + esc(nm) + ' ready</span>');
+    var mt = modeText(a);
+    var lc = !a.enabled ? 'bad' : a.local === 'read' ? 'ok' : 'warn';
+    out.push('<span class="st ' + lc + '"><span class="dot ' + lc + '"></span>Claude: ' + esc(mt) + '</span>');
+    if (s.lastCallAt) out.push('<span class="st"><span class="dot acc"></span>Last request ' + esc(ago(s.lastCallAt)) + '</span>');
+    var sec = s.security || {};
+    if (sec.mode === 'exposed') out.push('<span class="st warn"><span class="dot warn"></span>Exposed</span>');
+    var nrv = (s.reviews || []).filter(function (r) { return r.status === 'waiting'; }).length;
+    if (nrv) out.push('<span class="st" style="color:var(--acc)"><span class="dot acc"></span>' + plural(nrv, 'change') + ' to review</span>');
+    if (sec.pending && sec.pending.length) out.push('<span class="st warn"><span class="dot warn"></span>' + plural(sec.pending.length, 'approval') + ' waiting</span>');
+    if (s.update && s.update.available) out.push('<span class="st warn">Update ' + esc(s.update.latest) + ' available</span>');
+    var h = s.health;
+    if (h && h.level === 'bad') out.push('<span class="st bad"><span class="dot bad"></span>' + (h.storage.level === 'bad' ? 'Storage problem' : 'System problem') + '</span>');
+    else if (h && h.level === 'warn') out.push('<span class="st warn"><span class="dot warn"></span>System warning</span>');
+    if (s.demo) out.push('<span class="st">Demo</span>');
+    $('#status').innerHTML = out.join('');
+    $('#chkAll').classList.toggle('spin', !!st.checking);
+  }
+
+  function lvlCls(l) { return l === 'bad' ? 'bad' : l === 'warn' ? 'warn2' : 'good'; }
+  function renderSystem(h) {
+    if (!h) { $('#sysRows').innerHTML = row('Status', 'Checking…'); return; }
+    var st = h.storage, m = h.memory, ld = h.load;
+    $('#sysCard').className = 'dev ' + (h.level === 'bad' ? 'off' : h.level === 'warn' ? 'upd' : '');
+    $('#sysDot').className = 'dot ' + (h.level === 'bad' ? 'bad' : h.level === 'warn' ? 'warn' : 'ok');
+    $('#sysSub').textContent = h.level === 'ok' ? 'Saving works, resources are fine' : h.level === 'warn' ? 'Works, with a warning' : 'Needs attention';
+    var probs = function (x) { return x.problems && x.problems.length ? '<small>' + esc(x.problems.join(' ')) + '</small>' : ''; };
+    var r = row('Storage', '<span class="' + lvlCls(st.level) + '">' + (st.writable ? 'Saving works' : 'Cannot save') + (st.writable && st.latencyMs != null ? ' · ' + esc(st.latencyMs) + ' ms' : '') + '</span>' + probs(st));
+    r += row('Where', esc(st.where || st.path) + (st.kind === 'network' ? ' <span class="chip w">network</span>' : ''));
+    if (st.free) r += row('Free', esc(st.free));
+    r += row('Memory', '<span class="' + lvlCls(m.level) + '">' + esc(m.text) + '</span>' + probs(m));
+    r += row('Load', '<span class="' + lvlCls(ld.level) + '">' + esc(ld.text) + '</span>' + probs(ld));
+    $('#sysRows').innerHTML = r;
+    $('#sysWhen').textContent = 'Checked ' + ago(h.checkedAt);
+  }
+  $('#sysTest').onclick = function () { var b = this; b.disabled = true; api('api/health-check', {}).then(function () { b.disabled = false; toast('Checked', true); }); };
+
+  function renderPrinterCard(s) {
+    var p = s.printer, st = pst(s), pr = st.print || {}, busy = busyPrint(st), kl = st.klippy;
+    var bad = st.configured && (!st.ok || klippyBad(st));
+    $('#prCard').className = 'dev ' + (!st.configured ? 'none' : bad ? 'off' : kl === 'startup' ? 'upd' : busy ? 'busy' : '');
+    $('#prDot').className = 'dot ' + (!st.configured ? '' : bad ? 'bad' : kl === 'ready' ? 'ok' : 'warn');
+    $('#prName').textContent = p.name || 'Printer';
+    $('#prSub').textContent = st.hostname ? st.hostname + ' · ' + (p.url || '') : (p.url || 'No address yet');
+    var r = '';
+    if (st.configured) {
+      r += row('Klipper', st.checking && !st.checkedAt ? 'Checking…' : !st.ok ? '<span class="bad">Not reachable</span><small>' + esc(st.error) + '</small>' : klippyHtml(st));
+      if (st.klipper || st.moonraker) r += row('Versions', (st.klipper ? 'Klipper ' + esc(st.klipper) : '') + (st.moonraker ? '<small>Moonraker ' + esc(st.moonraker) + '</small>' : ''));
+      if (st.ok && pr.state) {
+        var pv = '<span class="' + (pr.state === 'error' ? 'bad' : pr.state === 'paused' ? 'warn2' : '') + '">' + esc(PSTATE[pr.state] || pr.state) + '</span>';
+        if (busy) {
+          pv += (pr.progress != null ? ' · ' + esc(pr.progress) + '%' : '') + (pr.duration ? ' · ' + esc(dur(pr.duration)) : '');
+          if (pr.file) pv += '<small>' + esc(pr.file) + '</small>';
+          if (pr.progress != null) pv += '<div class="pbar' + (pr.state === 'paused' ? ' paused' : '') + '"><i style="width:' + Math.max(0, Math.min(100, Number(pr.progress) || 0)) + '%"></i></div>';
+        } else if (pr.file && pr.state !== 'standby') pv += '<small>' + esc(pr.file) + '</small>';
+        r += row('Print', pv);
+      }
+      if (st.ok && st.temps) {
+        if (st.temps.hotend) r += row('Hotend', tempHtml(st.temps.hotend));
+        if (st.temps.bed) r += row('Bed', tempHtml(st.temps.bed));
+      }
+      if (st.ok && kl === 'ready' && st.homed != null) r += row('Homed', st.homed ? esc(String(st.homed).toUpperCase().split('').join(' ')) : '<span class="up">Not homed</span>');
+      if (st.warnings && st.warnings.length) r += row('Moonraker', '<span class="warn2">' + plural(st.warnings.length, 'warning') + '</span><small>' + esc(st.warnings.join(' ')) + '</small>');
+      if (st.ok && st.ms) r += row('Response', esc(st.ms) + ' ms');
+    } else r += row('Klipper', '<span class="up">Not set up</span><small>Add the Moonraker address in Settings</small>');
+    $('#prRows').innerHTML = r;
+    $('#prWhen').textContent = st.checkedAt ? 'Checked ' + ago(st.checkedAt) : '';
+    $('#prActs').classList.toggle('hide', !st.configured);
+    $('#prRestart').disabled = $('#prFw').disabled = busy || !st.ok;
+    var why = busy ? 'Not while a print is ' + pr.state : !st.ok ? 'The printer is not reachable' : '';
+    $('#prRestart').title = why || 'Restarts Klipper\'s host software and reloads the config (RESTART)';
+    $('#prFw').title = why || 'Restarts Klipper and its MCUs, including the toolhead board (FIRMWARE_RESTART)';
+    $('#prStop').disabled = !st.configured;
+  }
+
+  function renderMain(s) {
+    var st = pst(s), a = s.access;
+    var al = [];
+    if (!st.configured || !(s.setup && s.setup.completed)) al.push('<div class="errbox">' + (st.configured ? 'Setup is not finished yet.' : 'The printer is not set up yet.') + ' <button id="alSetup" class="on">Open the setup guide</button></div>');
+    else if (!st.ok && st.error) al.push('<div class="errbox">' + esc(st.error) + '</div>');
+    else if (klippyBad(st)) al.push('<div class="errbox"><b>Klipper ' + esc((KLIPPY[st.klippy] || st.klippy).toLowerCase()) + '.</b> ' + esc(st.message || '') + '</div>');
+    if (!a.enabled) al.push('<div class="errbox">Claude access is off: every request is refused.</div>');
+    if (s.health && s.health.storage.level === 'bad') al.push('<div class="errbox"><b>VoronMCP cannot save.</b> ' + esc(s.health.storage.problems.join(' ')) + '</div>');
+    $('#alerts').innerHTML = al.join('');
+    var as = $('#alSetup'); if (as) as.onclick = function () { openWizard(); };
+
+    renderPrinterCard(s);
+
+    // Claude access card
+    var mt = modeText(a);
+    var sc0 = s.security || {}, anyWrite = a.local !== 'read' || (sc0.mode === 'exposed' && (sc0.connections || []).some(function (c) { return c.effective !== 'read'; }));
+    $('#accCard').className = 'dev ' + (!a.enabled ? 'off' : anyWrite ? 'upd' : '');
+    $('#accDot').className = 'dot ' + (!a.enabled ? 'bad' : anyWrite ? 'warn' : 'ok');
+    paintSeg($('#accSeg'), a.enabled ? '1' : '0');
+    $('#accSub').textContent = a.enabled ? (anyWrite ? 'Claude can make changes' : 'Claude can look, not touch') : 'Every request is refused';
+    var on = (s.tools || []).filter(function (t) { return t.on; }).length;
+    var rr = row('Your network', esc(mt));
+    if (sc0.mode === 'exposed') rr += row('From outside', (sc0.connections || []).length ? (sc0.connections || []).map(function (c) { return esc(c.client) + ': ' + esc(LVL_NAME[c.effective]); }).join('<br>') : 'No connections');
+    rr += row('Blocked', (a.blocked || []).length ? chips(a.blocked.map(function (d) { return [d, 'b']; })) : '<span class="up">Nothing blocked</span>');
+    var lim = a.limits || {};
+    rr += row('Limits', 'Hotend ' + esc(lim.hotend) + ' · bed ' + esc(lim.bed) + ' · other ' + esc(lim.other) + ' °C');
+    if ((a.protectedFiles || []).length) rr += row('Protected', esc(a.protectedFiles.join(', ')));
+    rr += row('Tools', on + ' of ' + (s.tools || []).length);
+    rr += row('Outside', sc0.mode === 'exposed' ? '<span class="warn2">Exposed</span> · ' + plural((sc0.connections || []).length, 'connection') : 'Local only');
+    $('#accRows').innerHTML = rr;
+    $('#accWhen').textContent = s.lastCallAt ? 'Last request ' + ago(s.lastCallAt) : 'No requests yet';
+
+    $('#actList').innerHTML = actRows(s.activity || [], 12);
+    renderSystem(s.health);
+  }
+
+  var NEEDS = { edit: 'change', hands: 'hands on', delete: 'delete' };
+  function updateSettings(s) {
+    var p = s.printer, st = pst(s), a = s.access;
+    // printer pane
+    if (!prLoaded) { $('#prUrl').value = p.url || ''; $('#prNameIn').value = p.name || ''; prLoaded = true; }
+    $('#prKey').placeholder = p.hasKey ? 'Saved (type to replace)' : 'Paste the key (optional)';
+    $('#prKeyNote').textContent = p.hasKey ? 'Saved, kept encrypted and never shown. Type a new one to replace it' : 'Optional. Not needed when VoronMCP\'s machine is in trusted_clients';
+    $('#prKeyClear').classList.toggle('hide', !p.hasKey || !!s.demo);
+    $('#prStat').innerHTML = printerStatText(st);
+    $('#prUrl').disabled = $('#prKey').disabled = $('#prNameIn').disabled = $('#prSave').disabled = !!s.demo;
+    // Claude pane
+    var wsig = (s.security && s.security.mode) + s.publicUrl + (s.security && s.security.allowTokenRemote);
+    if ($('#webConn').dataset.sig !== wsig) { $('#webConn').dataset.sig = wsig; $('#webConn').innerHTML = webSteps(s, 'w'); }
+    fillConnect(document);
+    if (!$('#tryNote').innerHTML) $('#tryNote').innerHTML = tryHtml();
+    // permissions
+    paintSeg($('#pEnabled'), a.enabled ? '1' : '0');
+    paintSeg($('#rvOn'), s.review.enabled ? '1' : '0');
+    if (document.activeElement !== $('#rvTime')) $('#rvTime').value = String(s.review.timeoutMin);
+    paintSeg($('#rvWhat'), s.review.ifNoAnswer);
+    $('#rvWhat').classList.toggle('hide', !s.review.timeoutMin);
+    var done = (s.reviews || []).filter(function (r) { return r.status !== 'waiting'; });
+    $('#rvHist').innerHTML = done.length ? done.slice(0, 30).map(function (r) {
+      return '<div class="rhist"><span class="dot ' + (r.status === 'kept' ? 'ok' : r.status === 'reverted' ? 'warn' : '') + '"></span><span><b>' + esc(r.id) + '</b> <small>' + esc(r.action || 'made and deleted again') + ' by ' + esc(r.who || 'Claude') + '</small></span>' +
+        '<small>' + esc(r.status === 'withdrawn' ? 'nothing left to review' : r.status + (r.by && r.by !== 'you' ? ' (' + r.by + ')' : '')) + ' · ' + esc(ago(r.decidedAt)) + '</small></div>';
+    }).join('') : '<div class="note">Nothing yet. Kept and reverted changes show up here.</div>';
+    renderWho(s);
+    if (!blkLoaded) {
+      $('#pBlocked').value = (a.blocked || []).join(', ');
+      $('#pProt').value = (a.protectedFiles || []).join(', ');
+      var lim = a.limits || {};
+      $('#pLimH').value = lim.hotend; $('#pLimB').value = lim.bed; $('#pLimO').value = lim.other;
+      blkLoaded = true;
+    }
+    $('#toolList').innerHTML = (s.tools || []).map(function (t) {
+      return '<div class="tl' + (t.on ? '' : ' off') + '"><b>' + esc(t.name) + '</b><span>' + esc(t.title) + '</span>' + (t.needs ? '<span class="chip ' + (t.on ? (t.needs === 'edit' ? 'w' : 'b') : '') + '">' + esc(t.on ? NEEDS[t.needs] || t.needs : 'off') + '</span>' : t.on ? '<span class="chip o">read</span>' : '<span class="chip">off</span>') + '</div>';
+    }).join('');
+    // activity
+    $('#actNote').textContent = s.activityTotal ? 'Newest first. Showing ' + Math.min(60, s.activityTotal) + ' of ' + s.activityTotal + ' kept (the last 300).' : '';
+    $('#actFull').innerHTML = actRows(s.activity || [], 60);
+    // backups
+    if (subPane === 'backups' && bkSig !== s.backupCount) { bkSig = s.backupCount; loadBackups(); }
+    // settings
+    if (!keepLoaded) { $('#bkKeep').value = s.backup.keep; keepLoaded = true; }
+    $('#pinNote').textContent = s.pinRequired ? 'Set. Changes, restarts and showing the token need it. Emergency stop never does' : 'Not set. Anyone on this network can change settings, restart Klipper and see the token';
+    $('#pinRm').classList.toggle('hide', !s.pinRequired);
+    $('#verVal').textContent = s.version;
+    var u = s.update || {};
+    $('#updRow').classList.toggle('hide', !u.enabled);
+    $('#updNote').textContent = u.available ? 'Version ' + u.latest + ' is available' : u.failed ? 'Could not check' : u.checkedAt ? 'Up to date (checked ' + ago(u.checkedAt) + ')' : 'Not checked yet';
+    $('#updHow').classList.toggle('hide', !u.available);
+    $('#updImg').value = u.image || '';
+    $('#modeVal').textContent = s.demo ? 'Demo' : 'Live';
+    $('#modeNote').textContent = s.demo ? 'Simulated printer, access token "demo". Nothing is saved' : 'Connected to your printer';
+  }
+
+  function render(s) {
+    snap = s; lastMsg = Date.now();
+    document.body.classList.remove('offline');
+    renderHeader(s);
+    renderApprovals(s);
+    renderReviews(s);
+    renderSecButton(s);
+    if (inWizard) renderWizard(s); else if (inSecurity) renderSecurity(s); else if (inSetup) updateSettings(s); else renderMain(s);
+  }
+
+  // ---------- keep or revert ----------
+  /** line diff (longest common subsequence), unchanged runs folded */
+  function diffHtml(a, b) {
+    var n = a.length, m = b.length, L = [];
+    for (var i = 0; i <= n; i++) { L.push(new Array(m + 1).fill(0)); }
+    for (i = n - 1; i >= 0; i--) for (var j = m - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    var rows = []; i = 0; j = 0;
+    while (i < n || j < m) {
+      if (i < n && j < m && a[i] === b[j]) { rows.push(['s', a[i]]); i++; j++; }
+      else if (j < m && (i >= n || L[i][j + 1] >= L[i + 1][j])) { rows.push(['a', b[j]]); j++; }
+      else { rows.push(['d', a[i]]); i++; }
+    }
+    var keep = rows.map(function (r, k) { if (r[0] !== 's') return true; for (var d = -2; d <= 2; d++) { var q = rows[k + d]; if (q && q[0] !== 's') return true; } return false; });
+    var h = '', skipped = 0;
+    rows.forEach(function (r, k) {
+      if (!keep[k]) { skipped++; return; }
+      if (skipped) { h += '<div class="gap">… ' + plural(skipped, 'line') + ' unchanged</div>'; skipped = 0; }
+      h += '<div class="' + r[0] + '">' + esc(r[1] || ' ') + '</div>';
+    });
+    if (skipped) h += '<div class="gap">… ' + plural(skipped, 'line') + ' unchanged</div>';
+    return h || '<div class="gap">No difference</div>';
+  }
+  /** a config file's text as lines (none when the file did not exist) */
+  function revLines(v) {
+    if (!v || typeof v.content !== 'string') return [];
+    return v.content.replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n');
+  }
+  var rvSig = '', rvOpen = {};
+  var ACT = { changed: ['changed', 'acc'], created: ['created', 'o'], deleted: ['deleted', 'b'] };
+  function renderReviews(s) {
+    var list = (s.reviews || []).filter(function (r) { return r.status === 'waiting'; });
+    var sig = JSON.stringify(list.map(function (r) { return [r.rid, r.updatedAt, r.autoAt, !!rvOpen[r.rid]]; })) + s.review.ifNoAnswer;
+    if (sig === rvSig) return;
+    rvSig = sig;
+    $('#reviews').innerHTML = list.map(function (r) {
+      var a = ACT[r.action] || [r.action, ''];
+      var auto = r.autoAt ? '<span class="tm">' + (s.review.ifNoAnswer === 'revert' ? 'Reverts' : 'Kept') + ' automatically in <b data-until="' + Number(r.autoAt) + '">' + left(r.autoAt - Date.now()) + '</b></span>' : '<span class="tm">waiting for you</span>';
+      return '<div class="rev"><div class="ah"><span class="dot acc"></span>' + esc(r.who || 'Claude') + ' ' + esc(a[0]) + ' a config file: ' + esc(r.id) + ' <span class="chip ' + a[1] + '">' + esc(a[0]) + '</span>' + auto + '</div>' +
+        '<div class="sub">' + esc(when(r.at)) + (r.where === 'outside' ? ' · from outside' : '') + (r.changes > 1 ? ' · changed ' + r.changes + ' times; Revert goes back to the version before the first change' : '') + (r.before ? ' · the old version is backed up' : '') + (r.note ? '<br>' + esc(r.note) : '') + '</div>' +
+        (rvOpen[r.rid] ? '<div class="diff">' + diffHtml(revLines(r.before), revLines(r.after)) + '</div>' : '') +
+        '<div class="af"><button data-rvshow="' + r.rid + '">' + (rvOpen[r.rid] ? 'Hide changes' : 'Show changes') + '</button><span class="sp"></span>' +
+        '<button class="danger" data-rvrevert="' + r.rid + '">Revert</button><button class="on" data-rvkeep="' + r.rid + '">Keep</button></div></div>';
+    }).join('');
+    $$('[data-rvshow]').forEach(function (b) { b.onclick = function () { rvOpen[b.dataset.rvshow] = !rvOpen[b.dataset.rvshow]; rvSig = ''; renderReviews(snap); }; });
+    $$('[data-rvkeep]').forEach(function (b) { b.onclick = function () { b.disabled = true; api('api/review', { rid: b.dataset.rvkeep, keep: true }).then(function (j) { b.disabled = false; report(j, 'Could not keep it'); if (j.ok) toast('Kept', true); }); }; });
+    $$('[data-rvrevert]').forEach(function (b) {
+      b.onclick = function () {
+        var r = list.filter(function (x) { return x.rid === b.dataset.rvrevert; })[0];
+        var what = r.action === 'created' ? 'deletes the new file ' + r.id : r.action === 'deleted' ? 'brings ' + r.id + ' back' : 'puts ' + r.id + ' back the way it was before Claude\'s first change';
+        confirmBox('Revert ' + r.id + '?', '<p>This ' + esc(what) + '. The current version is backed up first. Klipper uses the old version after its next restart.</p>', 'Revert', true).then(function (y) {
+          if (!y) return;
+          api('api/review', { rid: r.rid, keep: false }).then(function (j) { report(j, 'Could not revert'); if (j.ok) toast(j.note || 'Reverted', true); });
+        });
+      };
+    });
+  }
+
+  // ---------- exposed mode: approvals, connections, events ----------
+  var SCOPES = [['read', 'Look only'], ['build', 'Help build'], ['hands', 'Hands on']];
+  function scopeSeg(attr, id, cur) { return '<div class="seg" ' + attr + '="' + esc(id) + '">' + SCOPES.map(function (x) { return '<button data-v="' + x[0] + '"' + (cur === x[0] ? ' class="on"' : '') + '>' + x[1] + '</button>'; }).join('') + '</div>'; }
+  var SPANS = [['1h', '1 hour'], ['8h', '8 hours'], ['1d', '1 day'], ['7d', '7 days'], ['30d', '30 days'], ['none', 'No limit']];
+  var apSpan = {};
+  function spanSelect(attr, id, cur) { return '<select ' + attr + '="' + esc(id) + '" aria-label="Access time">' + SPANS.map(function (x) { return '<option value="' + x[0] + '"' + (cur === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select>'; }
+  /** "9:42", "5 h 12 min", "3 days" */
+  function left(ms, short) {
+    var s = Math.max(0, Math.round(ms / 1000));
+    if (short || s < 3600) return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    var h = Math.floor(s / 3600), d = Math.floor(h / 24);
+    return d >= 2 ? d + ' days' : h + ' h ' + Math.floor((s % 3600) / 60) + ' min';
+  }
+  // every countdown on the page: elements with data-until="<ms>" (and data-fmt="mmss" for request timers)
+  setInterval(function () {
+    $$('[data-until]').forEach(function (el) {
+      var ms = Number(el.dataset.until) - Date.now();
+      el.textContent = (el.dataset.pre || '') + left(ms, el.dataset.fmt === 'mmss');
+      el.classList.toggle('urgent', ms < 60000 || (el.dataset.fmt !== 'mmss' && ms < 15 * 60000));
+    });
+  }, 1000);
+
+  function renderApprovals(s) {
+    var list = (s.security && s.security.pending) || [];
+    var sig = list.map(function (p) { return p.id + (apScope[p.id] || 'read') + (apSpan[p.id] || ''); }).join('|') + (s.security && s.security.accessDefault);
+    if (sig === apSig) return;
+    apSig = sig;
+    $('#approvals').innerHTML = list.map(function (p) {
+      var sc = apScope[p.id] || 'read';
+      return '<div class="appr"><div class="ah"><span class="dot warn"></span>Claude wants to connect from outside<span class="tm">Request expires in <b data-until="' + Number(p.expiresAt) + '" data-fmt="mmss">' + left(p.expiresAt - Date.now(), true) + '</b></span></div>' +
+        '<div class="ab"><div class="acode">' + esc(p.code) + '</div><div class="ai2"><b>' + esc(p.client) + '</b>' + (p.clientHost ? esc(p.clientHost) + ' · ' : '') + 'from ' + esc(p.ip) + ' · ' + esc(ago(p.createdAt)) +
+        '<br>Approve only if the sign-in page you just opened shows this same code.</div></div>' +
+        '<div class="af"><span class="note">It may</span>' + scopeSeg('data-aps', p.id, sc) + '<span class="note">for</span>' + spanSelect('data-apspan', p.id, apSpan[p.id] || (s.security && s.security.accessDefault) || 'none') +
+        '<span class="sp"></span><button data-deny="' + esc(p.id) + '">Deny</button><button class="on" data-approve="' + esc(p.id) + '">Approve</button></div></div>';
+    }).join('');
+    $$('[data-aps]').forEach(function (g) { $$('button', g).forEach(function (b) { b.onclick = function () { apScope[g.dataset.aps] = b.dataset.v; apSig = ''; renderApprovals(snap); }; }); });
+    $$('[data-apspan]').forEach(function (sel) { sel.onchange = function () { apSpan[sel.dataset.apspan] = sel.value; }; });
+    $$('[data-approve]').forEach(function (b) { b.onclick = function () { decide(b.dataset.approve, true); }; });
+    $$('[data-deny]').forEach(function (b) { b.onclick = function () { decide(b.dataset.deny, false); }; });
+  }
+  function decide(id, yes) {
+    var sc = apScope[id] || 'read', sp = apSpan[id] || (snap.security && snap.security.accessDefault) || 'none';
+    var go = function () { api('api/connections/decide', { id: id, approve: yes, scope: sc, span: sp }).then(function (j) { report(j, 'Could not do that'); if (j.ok) { apSig = ''; toast(yes ? 'Approved. Claude is signing in' : 'Denied', yes); } }); };
+    if (yes && sc === 'hands') confirmBox('Let this connection run the printer?', '<p>Claude, from outside your home, will be able to move the toolhead, heat the hotend and bed and control prints (within Permissions). Blocked G-code and temperature limits still apply. Only approve this when someone is at the printer.</p>', 'Approve').then(function (y) { if (y) go(); });
+    else go();
+  }
+
+  var EV = {
+    'connection-requested': ['Claude asked to connect', 'acc'], 'connection-approved': ['Connection approved', 'ok'], 'connection-denied': ['Connection denied', ''],
+    'connection-created': ['Connection signed in', 'ok'], 'connection-revoked': ['Connection revoked', 'warn'], 'connection-changed': ['Connection permission changed', ''],
+    'client-registered': ['An app registered for sign-in', ''], 'client-metadata-failed': ['Could not read an app\'s details', 'warn'],
+    'address-locked': ['Address locked out after failed attempts', 'bad'], 'public-paused': ['Sign-in from outside paused: many failures', 'bad'],
+    'pin-lockout': ['Too many wrong PINs', 'bad'], 'admin-refused': ['Blocked a request to the settings port', 'bad'],
+    'code-wrong': ['Wrong authenticator code', 'warn'], 'codes-paused': ['Code approvals paused for an hour', 'bad'],
+    'codes-switched-off': ['Code approvals switched off', 'bad'], 'codes-enabled': ['Authenticator approvals set up', 'ok'],
+    'codes-disabled': ['Authenticator approvals turned off', ''], 'codes-resumed': ['Code approvals switched back on', 'ok'],
+    'mode-changed': ['Mode changed', 'warn'], 'token-remote': ['Access token from outside changed', 'warn'], 'token-replaced': ['New access token made', '']
+  };
+  function evDetail(e) {
+    var bits = [];
+    if (e.client) bits.push(e.client); if (e.code) bits.push('code ' + e.code); if (e.scope) bits.push((SCOPES.filter(function (x) { return x[0] === e.scope; })[0] || [0, e.scope])[1]);
+    if (e.mode) bits.push(e.mode === 'exposed' ? 'Exposed' : 'Local only'); if (e.allowed != null) bits.push(e.allowed ? 'On' : 'Off');
+    if (e.via) bits.push('with ' + e.via);
+    if (e.ip) bits.push('from ' + e.ip); if (e.why) bits.push(e.why); if (e.path) bits.push(e.path); if (e.error) bits.push(e.error);
+    return bits.join(' · ');
+  }
+  function chk(ok, title, note) { return '<div class="chk ' + (ok === true ? 'ok' : ok === false ? 'bad' : '') + '"><span class="ck">' + (ok === true ? '✓' : ok === false ? '!' : '·') + '</span><span>' + title + (note ? '<small>' + note + '</small>' : '') + '</span></div>'; }
+
+  function renderSecurity(s) {
+    var sec = s.security || {}, ex = sec.mode === 'exposed';
+    paintSeg($('#secMode'), sec.mode);
+    $('#secModeNote').textContent = ex ? 'Claude can reach VoronMCP from outside through your reverse proxy. This page only opens from your home network.' : 'Only devices on your network can reach VoronMCP. The public port answers nothing.';
+    var t = sec.selfTest;
+    $('#secReq').innerHTML = chk(!!s.pinRequired, 'Control PIN is set', s.pinRequired ? '' : 'Needed before exposing: Settings > Settings > Control') +
+      chk(!!sec.publicUrl, 'Public address is set', sec.publicUrl || 'Enter it below') +
+      chk(t ? t.ok : null, 'Proxy check', t ? (t.ok ? 'Passed ' + ago(t.at) : 'Did not pass. See the results below') : 'Not run yet');
+    if (!pubLoaded) { $('#secPub').value = sec.publicUrl || ''; pubLoaded = true; }
+    $('#secTestOut').innerHTML = t ? (t.checks || []).map(function (c) { return chk(c.ok, esc(c.name), esc(c.detail)); }).join('') + (t.error ? '<div class="errbox">' + esc(t.error) + '</div>' : '') : '';
+    var host = location.hostname, pp = esc(sec.publicPort), ap = esc(sec.adminPort);
+    $('#secProxy').innerHTML = '<p class="note" style="margin:0 0 8px">VoronMCP listens on two ports. Forward <b>only the public one</b>.</p>' +
+      chk(true, 'Public port: container port <code>' + pp + '</code>', 'Point the proxy at the host port this is published on in VoronMCP\'s app YAML, for example <code>http://' + esc(host) + ':' + pp + '</code> if it is published unchanged') +
+      chk(false, 'Settings port: container port <code>' + ap + '</code>', 'Never forward this one (this page). In exposed mode it refuses anything that comes through a proxy anyway.') +
+      '<ol class="steps"><li><b>Cloudflare Tunnel:</b> add a public hostname (for example <code>voronmcp.yourdomain.com</code>) with service <code>http://' + esc(host) + ':' + pp + '</code>.</li>' +
+      '<li><b>Nginx Proxy Manager, Caddy or Traefik:</b> a proxy host for that name, forwarding to <code>' + esc(host) + ':' + pp + '</code>, with an https certificate.</li>' +
+      '<li>Keep the host name and send <code>X-Forwarded-Proto: https</code> (all of these do by default). VoronMCP refuses plain http and other host names.</li></ol>';
+    var cs = JSON.stringify(sec.connections || []);
+    if (cs !== connSig) {
+      connSig = cs;
+      $('#secConns').innerHTML = (sec.connections || []).length ? sec.connections.map(function (c) {
+        return '<div class="conn"><div class="ci"><b>' + esc(c.client) + '</b><span>Signed in ' + esc(when(c.createdAt)) + ' · ' + (c.lastUsedAt ? 'last used ' + esc(ago(c.lastUsedAt)) + (c.lastIp ? ' from ' + esc(c.lastIp) : '') : 'not used yet') + ' · ' + plural(c.uses, 'request') + '</span>' +
+          '<span class="acc-left">' + (c.expiresAt ? 'Access ends in <b data-until="' + Number(c.expiresAt) + '">' + left(c.expiresAt - Date.now()) + '</b>' : 'No time limit (ends after 30 days unused)') + '</span></div>' +
+          '<span class="note">' + esc(LVL_NAME[c.effective] || c.effective) + ' · <button class="link" data-golvl>change</button></span><span class="cspan">' + spanSelect('data-cspan', c.id, '') + '</span><button class="danger" data-revoke="' + esc(c.id) + '">Revoke</button></div>';
+      }).join('') : '<div class="note">' + (ex ? 'None yet. When Claude signs in from outside and you approve it, it shows up here.' : 'None. Connections from outside need exposed mode.') + '</div>';
+      $$('[data-cspan]').forEach(function (sel) {
+        sel.insertAdjacentHTML('afterbegin', '<option value="" selected disabled>Access time…</option>');
+        sel.onchange = function () {
+          var label = sel.options[sel.selectedIndex].text;
+          confirmBox('Set access to ' + label.toLowerCase() + '?', '<p>' + (sel.value === 'none' ? 'This connection then has no time limit; it ends if unused for 30 days, or when you revoke it.' : 'Counted from now. When it runs out, the connection stops working and Claude has to sign in and be approved again.') + '</p>', 'Set').then(function (y) {
+            if (!y) { sel.selectedIndex = 0; return; }
+            api('api/connections/span', { id: sel.dataset.cspan, span: sel.value }).then(function (j) { report(j, 'Could not change it'); connSig = ''; if (j.ok) toast('Access time set', true); });
+          });
+        };
+      });
+      $$('[data-golvl]').forEach(function (b) { b.onclick = function () { showTab(true); showSub('perm'); }; });
+      $$('[data-revoke]').forEach(function (b) { b.onclick = function () { confirmBox('Revoke this connection?', '<p>It stops working at once. Claude has to sign in again, and you approve it again.</p>', 'Revoke', true).then(function (y) { if (y) api('api/connections/revoke', { id: b.dataset.revoke }).then(function (j) { report(j, 'Could not revoke'); connSig = ''; }); }); }; });
+    }
+    $('#secRevokeAll').disabled = !(sec.connections || []).length;
+    renderTotp(s);
+    var ss = $('#secSpan');
+    if (!ss.options.length) ss.innerHTML = SPANS.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('');
+    if (document.activeElement !== ss) ss.value = sec.accessDefault || 'none';
+    paintSeg($('#secTokRemote'), sec.allowTokenRemote ? '1' : '0');
+    $('#secKey').innerHTML = (sec.keyMismatch ? '<div class="errbox"><b>The encryption key does not match.</b> The saved tokens were encrypted with a different key. Put back the right VORONMCP_MASTER_KEY, or enter the Moonraker API key again.</div>' : '') +
+      chk(true, 'Tokens are encrypted at rest (AES-256-GCM)', 'Moonraker\'s API key (if you saved one) and Claude\'s access token. Sign-in tokens are stored only as hashes, never readable.') +
+      (sec.keyWhere === 'master' ? chk(true, 'The key comes from the app\'s environment', 'VORONMCP_MASTER_KEY is set, and no key is stored on the data volume. A copy of the volume alone cannot be decrypted.')
+        : chk(null, 'The key is stored on the data volume', 'Anyone with a copy of the whole volume could decrypt the tokens. To keep the key off it, add an environment variable <code>VORONMCP_MASTER_KEY</code> with a long random value to the app\'s YAML. VoronMCP moves the tokens over and deletes the key file.')) +
+      chk(true, 'Traffic from outside is https only', 'Your reverse proxy holds the certificate; VoronMCP refuses anything that did not arrive over https.');
+    $('#secEvents').innerHTML = (sec.events || []).length ? sec.events.map(function (e) {
+      var d = EV[e.type] || [e.type, ''];
+      return '<div class="arow ev"><span class="dot ' + d[1] + '"></span><div class="an"><b style="font-family:inherit">' + esc(d[0]) + '</b><span style="font-family:inherit;white-space:normal">' + esc(evDetail(e)) + '</span></div><div class="aw">' + esc(ago(e.t)) + '</div></div>';
+    }).join('') : '<div class="note" style="padding:10px 0">Nothing yet.</div>';
+  }
+
+  var totpSig = '';
+  function renderTotp(s) {
+    var t = (s.security && s.security.totp) || {}, ex = s.security && s.security.mode === 'exposed';
+    var sig = JSON.stringify(t) + ex;
+    if (sig === totpSig) return;
+    totpSig = sig;
+    var h = '';
+    if (!t.enabled) {
+      h = '<div class="set first"><div class="sl"><b>Not set up</b><span>Takes a minute: scan a QR code with your authenticator app, then type the code it shows.</span></div><div class="sc"><button class="on" id="totpSetup">Set up</button></div></div>';
+    } else {
+      if (t.off) h += '<div class="errbox"><b>Code approvals are switched off.</b> There were 20 wrong codes within 24 hours, so VoronMCP stopped accepting codes. Check the security events. <button class="on" id="totpResume" style="margin-left:6px">Switch back on</button></div>';
+      else if (t.paused) h += '<div class="errbox" style="border-color:var(--warn);background:color-mix(in srgb, var(--warn) 10%, transparent)">Paused for up to an hour after 5 wrong codes. Approving at home still works.</div>';
+      h += chk(true, 'On since ' + esc(when(t.since)), ex ? (t.failsToday ? plural(t.failsToday, 'wrong code') + ' in the last 24 hours' : 'No wrong codes in the last 24 hours') : 'Only used in exposed mode');
+      h += '<div class="set"><div class="sl"><span>A code may approve up to <b>' + esc(LVL_NAME[t.maxScope]) + '</b>. Change it under Permissions.</span></div></div>';
+      h += '<div class="set"><div class="sl"><span>Got a new phone? Set it up again; the old app\'s codes stop working.</span></div><div class="sc"><button id="totpSetup">Set up again</button><button class="danger" id="totpOff">Turn off</button></div></div>';
+    }
+    $('#totpBox').innerHTML = h;
+    var su = $('#totpSetup'); if (su) su.onclick = setupTotp;
+    var rs = $('#totpResume'); if (rs) rs.onclick = function () { api('api/totp', { action: 'resume' }).then(function (j) { report(j, 'Could not do that'); }); };
+    var of = $('#totpOff'); if (of) of.onclick = function () { confirmBox('Turn off authenticator approvals?', '<p>New connections can then only be approved here at home. Existing connections keep working.</p>', 'Turn off', true).then(function (y) { if (y) api('api/totp', { action: 'disable' }).then(function (j) { report(j, 'Could not turn it off'); }); }); };
+  }
+  function setupTotp() {
+    api('api/totp', { action: 'setup' }).then(function (j) {
+      if (!j.ok) { report(j, 'Could not start the setup'); return; }
+      var m = openModal('<div class="mh">Set up your authenticator app</div><div class="mb">' +
+        '<div class="qrwrap"><div class="qr">' + j.svg + '</div><div style="flex:1;min-width:220px">' +
+        '<ol class="steps" style="margin-top:0"><li>In your authenticator app, choose <b>add</b> (often a <b>+</b>) and <b>scan a QR code</b>.</li><li>Scan this code. The app adds <b>VoronMCP</b>.</li><li>Type the 6-digit code it shows, below.</li></ol>' +
+        '<div class="note" style="margin:10px 0 4px">Can\'t scan? Enter this setup key instead (time-based, 6 digits):</div><div class="qrkey">' + esc(j.secret) + '</div>' +
+        '</div></div>' +
+        '<div class="set"><div class="sl"><b>Code from the app</b><span>Proves the app is set up right</span></div><div class="sc"><input id="totpCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000"></div></div>' +
+        '<div id="totpErr" class="formerr hide"></div>' +
+        '</div><div class="mf"><button id="mCancel">Cancel</button><button id="mGo" class="on">Turn on</button></div>', true);
+      var inp = $('#totpCode', m);
+      inp.addEventListener('input', function () { inp.value = inp.value.replace(/\D/g, '').slice(0, 6); });
+      inp.focus();
+      $('#mCancel', m).onclick = closeModal;
+      var go = function () {
+        api('api/totp', { action: 'confirm', code: inp.value }).then(function (r) {
+          if (r.ok) { closeModal(); toast('Authenticator approvals are on', true); totpSig = ''; return; }
+          if (r.cancelled) return;
+          $('#totpErr', m).textContent = r.error || 'That did not work'; $('#totpErr', m).classList.remove('hide'); inp.value = ''; inp.focus();
+        });
+      };
+      $('#mGo', m).onclick = go;
+      inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+    });
+  }
+
+  $$('#secMode button').forEach(function (b) {
+    b.onclick = function () {
+      var v = b.dataset.v;
+      if (v === snap.security.mode) return;
+      var go = function () { api('api/security', { mode: v }).then(function (j) { report(j, 'Could not change the mode'); if (j.ok) toast(v === 'exposed' ? 'Exposed mode is on' : 'Local only. The public port answers nothing now', true); }); };
+      if (v === 'exposed') confirmBox('Turn on exposed mode?', '<p>VoronMCP\'s public port starts answering Claude\'s sign-in and /mcp, for the reverse proxy to forward. This settings page stays reachable only from your home network.</p><p>Point the proxy at the <b>public port (' + esc(snap.security.publicPort) + ')</b>, never at the settings port (' + esc(snap.security.adminPort) + ').</p>', 'Turn on').then(function (y) { if (y) go(); });
+      else go();
+    };
+  });
+  $('#secSpan').onchange = function () { api('api/security', { accessDefault: this.value }).then(function (j) { report(j, 'Could not save'); if (j.ok) toast('Saved', true); }); };
+  $('#secPubSave').onclick = function () { api('api/settings', { publicUrl: $('#secPub').value.trim() }).then(function (j) { report(j, 'Could not save'); if (j.ok) { pubLoaded = false; toast('Saved', true); } }); };
+  $('#secTest').onclick = function () { var b = this; b.disabled = true; b.textContent = 'Testing…'; api('api/security/selftest', {}).then(function (j) { b.disabled = false; b.textContent = 'Test'; report(j, 'Could not test'); }); };
+  $$('#secTokRemote button').forEach(function (b) {
+    b.onclick = function () {
+      var on = b.dataset.v === '1';
+      var go = function () { api('api/security', { allowTokenRemote: on }).then(function (j) { report(j, 'Could not save'); }); };
+      if (on) confirmBox('Accept the access token from outside?', '<p>Anyone who gets hold of the token could then use VoronMCP from the internet, with the permission you choose, without approval at home. Sign-in with approval is safer.</p>', 'Accept it', true).then(function (y) { if (y) go(); });
+      else go();
+    };
+  });
+  $('#secRevokeAll').onclick = function () { confirmBox('Revoke all connections from outside?', '<p>Every Claude app signed in from outside stops working at once and has to sign in and be approved again.</p>', 'Revoke all', true).then(function (y) { if (y) api('api/connections/revoke', { all: true }).then(function (j) { report(j, 'Could not revoke'); connSig = ''; }); }); };
+  $('#secClear').onclick = function () { confirmBox('Clear the security events?', '<p>Only this list is emptied.</p>', 'Clear', true).then(function (y) { if (y) api('api/security/clear', {}); }); };
+
+  // ---------- backups ----------
+  function kb(n) { return n == null ? '' : n < 1024 ? n + ' B' : (Math.round(n / 102.4) / 10) + ' KB'; }
+  function loadBackups() {
+    fetch('api/backups', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+      var list = j.backups || [];
+      if (!list.length) { $('#bkList').innerHTML = '<div class="note">' + (snap && snap.demo ? 'Demo mode keeps no backups.' : 'No backups yet. They appear when Claude changes or deletes a config file.') + '</div>'; return; }
+      $('#bkList').innerHTML = list.map(function (b, i) {
+        return '<div class="bk"><span><b style="font-family:var(--mono);font-weight:600">' + esc(b.id) + '</b>' + (b.size != null ? ' <small>' + esc(kb(b.size)) + '</small>' : '') + '<br><small>' + esc(when(b.savedAt)) + ' · ' + esc(String(b.reason || '').replace(/-/g, ' ')) + '</small></span>' +
+          '<button data-dl="' + i + '">Download</button><button data-rs="' + i + '">Restore</button></div>';
+      }).join('');
+      $$('[data-dl]', $('#bkList')).forEach(function (btn) { btn.onclick = function () { var b = list[btn.dataset.dl]; location.href = 'api/backup?kind=' + encodeURIComponent(b.kind) + '&id=' + encodeURIComponent(b.id) + '&file=' + encodeURIComponent(b.file) + '&pin=' + encodeURIComponent(pin); }; });
+      $$('[data-rs]', $('#bkList')).forEach(function (btn) {
+        btn.onclick = function () {
+          var b = list[btn.dataset.rs];
+          confirmBox('Restore ' + b.id + '?', '<p>Puts ' + esc(b.id) + ' back the way it was on ' + esc(when(b.savedAt)) + '. The current version is backed up first. Restart Klipper afterwards for it to take effect.</p>', 'Restore').then(function (yes) {
+            if (!yes) return;
+            api('api/restore', { kind: b.kind, id: b.id, file: b.file }).then(function (j) { report(j, 'Could not restore'); if (j.ok) { toast(j.note || 'Restored', true); loadBackups(); } });
+          });
+        };
+      });
+    }).catch(function () { $('#bkList').innerHTML = '<div class="note">Could not load the backups.</div>'; });
+  }
+
+  // ---------- buttons ----------
+  function testPrinter(btn) {
+    var t = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Testing…'; }
+    return api('api/printer-test', {}).then(function (j) {
+      if (btn) { btn.disabled = false; btn.textContent = t; }
+      if (j.ok) { if (btn) toast('The printer answered', true); } else report(j, 'Could not reach the printer');
+      return j;
+    });
+  }
+  $('#prTest').onclick = function () { testPrinter(this); };
+  $('#prTest2').onclick = function () { testPrinter(this); };
+  $('#chkAll').onclick = function () { testPrinter(null); };
+  function savePrinter(body, errEl) {
+    if (errEl) errEl.classList.add('hide');
+    return api('api/printer', body).then(function (j) {
+      if (j.cancelled) return j;
+      if (!j.ok) { if (errEl) { errEl.textContent = j.error || 'Could not save'; errEl.classList.remove('hide'); } else report(j, 'Could not save'); }
+      return j;
+    });
+  }
+  $('#prSave').onclick = function () {
+    var body = { url: $('#prUrl').value.trim(), name: $('#prNameIn').value.trim() }, key = $('#prKey').value.trim();
+    if (key) body.apiKey = key;
+    savePrinter(body, $('#prErr')).then(function (j) { if (j.ok) { $('#prKey').value = ''; prLoaded = false; toast('Saved. Testing…', true); } });
+  };
+  $('#prKeyClear').onclick = function () {
+    confirmBox('Remove the API key?', '<p>VoronMCP then only gets in if its machine is in <code>trusted_clients</code> in moonraker.conf.</p>', 'Remove', true).then(function (y) {
+      if (y) savePrinter({ url: snap.printer.url, clearKey: true }, $('#prErr')).then(function (j) { if (j.ok) toast('Key removed', true); });
+    });
+  };
+  function printerAction(action, label) {
+    return api('api/printer-action', { action: action }).then(function (j) { report(j, 'Could not do that'); if (j.ok) toast(label, true); return j; });
+  }
+  $('#prRestart').onclick = function () {
+    confirmBox('Restart Klipper?', '<p>Klipper reloads its config (RESTART). Heaters switch off and the printer has to be homed again.</p>', 'Restart').then(function (y) { if (y) printerAction('restart', 'Klipper is restarting'); });
+  };
+  $('#prFw').onclick = function () {
+    confirmBox('Firmware restart?', '<p>Klipper and every MCU restart (FIRMWARE_RESTART), including the CAN toolhead board. Heaters switch off and the printer has to be homed again.</p>', 'Firmware restart').then(function (y) { if (y) printerAction('firmware_restart', 'Firmware restart sent'); });
+  };
+  $('#prStop').onclick = function () {
+    confirmBox('Emergency stop?', '<p>Sends M112: all motors and heaters stop at once and Klipper shuts down. A running print is lost. Afterwards use <b>Firmware restart</b> to bring the printer back.</p>', 'Emergency stop', true).then(function (y) {
+      if (!y) return;
+      // no PIN for this one: stopping must always be quick
+      fetch('api/printer-action', { method: 'POST', headers: { 'content-type': 'application/json', 'x-pin': pin }, body: JSON.stringify({ action: 'estop' }) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { if (j.ok) toast('Emergency stop sent', true); else toast(j.error || 'Emergency stop failed. Use the printer\'s power switch'); })
+        .catch(function () { toast('Could not reach VoronMCP. Use the printer\'s power switch'); });
+    });
+  };
+  $('#connBtn').onclick = openConnect;
+  $('#permBtn').onclick = function () { showTab(true); showSub('perm'); };
+  $('#actAll').onclick = function () { showTab(true); showSub('activity'); };
+  $$('#accSeg button').forEach(function (b) { b.onclick = function () { setAccess({ enabled: b.dataset.v === '1' }); }; });
+  $$('#rvOn button').forEach(function (b) { b.onclick = function () { api('api/review', { enabled: b.dataset.v === '1' }).then(function (j) { report(j, 'Could not save'); }); }; });
+  $('#rvTime').onchange = function () { api('api/review', { timeoutMin: Number(this.value) }).then(function (j) { report(j, 'Could not save'); }); };
+  $$('#rvWhat button').forEach(function (b) { b.onclick = function () { api('api/review', { ifNoAnswer: b.dataset.v }).then(function (j) { report(j, 'Could not save'); }); }; });
+  $$('#pEnabled button').forEach(function (b) { b.onclick = function () { setAccess({ enabled: b.dataset.v === '1' }); }; });
+
+  $('#lvlTable').innerHTML = LVL.map(function (l) { return '<div class="tl"><b style="min-width:92px;font-family:inherit">' + esc(l[1]) + '</b><span>' + esc(l[2]) + '</span></div>'; }).join('') +
+    '<div class="note" style="margin-top:8px">Each level includes the ones above it. The safety rules (below) hold at every level.</div>';
+  var LVL_WARN = { hands: 'Claude can move the toolhead and heat the hotend and bed. Only use it when you are at the printer.',
+    full: 'Claude will also be able to delete files on the printer (config files are backed up first) and restart services such as Moonraker.' };
+  function lvlSeg(attr, id, cur, max) {
+    return '<div class="seg" ' + attr + '="' + esc(id) + '">' + LVL.filter(function (l) { return LEVELS_UP_TO(max).indexOf(l[0]) >= 0; }).map(function (l) {
+      return '<button data-v="' + l[0] + '"' + (cur === l[0] ? ' class="on"' : '') + '>' + l[1] + '</button>'; }).join('') + '</div>';
+  }
+  function LEVELS_UP_TO(max) { var all = ['read', 'build', 'hands', 'full']; return all.slice(0, all.indexOf(max) + 1); }
+  function raise(level, fn) { if (LVL_WARN[level]) confirmBox('Allow ' + LVL_NAME[level] + '?', '<p>' + esc(LVL_WARN[level]) + '</p>', 'Allow').then(function (y) { if (y) fn(); }); else fn(); }
+  var whoSig = '';
+  function renderWho(s) {
+    var a = s.access, sec = s.security || {}, ex = sec.mode === 'exposed', t = sec.totp || {};
+    var sig = JSON.stringify([a.local, a.outsideMax, ex, (sec.connections || []).map(function (c) { return [c.id, c.scope, c.effective]; }), sec.allowTokenRemote, sec.tokenScope, t.enabled, t.maxScope]);
+    if (sig === whoSig) return;
+    whoSig = sig;
+    var cap = function (lvl) { var om = a.outsideMax; var e = LEVELS_UP_TO(om).indexOf(lvl) >= 0 ? lvl : om; return e !== lvl ? '<span class="warn2" style="font-size:12px"> · limited to ' + esc(LVL_NAME[e]) + ' by the outside limit</span>' : ''; };
+    var h = '<div class="set first"><div class="sl"><b>Claude on your network</b><span>Claude Code with the access token, on VoronMCP\'s private port</span></div><div class="sc">' + lvlSeg('data-lvl', 'local', a.local, 'full') + '</div></div>';
+    h += '<div class="set"><div class="sl"><b>Highest level from outside</b><span>A limit over every connection through the public address. Full is never allowed from outside</span></div><div class="sc">' + lvlSeg('data-lvl', 'outsideMax', a.outsideMax, 'hands') + '</div></div>';
+    if (ex) {
+      (sec.connections || []).forEach(function (c) {
+        h += '<div class="set"><div class="sl"><b>' + esc(c.client) + '</b><span>Connection from outside, signed in ' + esc(when(c.createdAt)) + cap(c.scope) + '</span></div><div class="sc">' + lvlSeg('data-clvl', c.id, c.scope, 'hands') + '</div></div>';
+      });
+      if (!(sec.connections || []).length) h += '<div class="set"><div class="sl"><span>No connections from outside yet. When you approve one, you choose its level, and it appears here.</span></div></div>';
+      if (sec.allowTokenRemote) h += '<div class="set"><div class="sl"><b>Access token from outside</b><span>Apps that send the token as a header over the public address' + cap(sec.tokenScope) + '</span></div><div class="sc">' + lvlSeg('data-tlvl', 'x', sec.tokenScope, 'hands') + '</div></div>';
+      if (t.enabled) h += '<div class="set"><div class="sl"><b>Approving with an authenticator code</b><span>The highest level a code may grant; higher still needs approval at home</span></div><div class="sc">' + lvlSeg('data-qlvl', 'x', t.maxScope, 'hands') + '</div></div>';
+    } else h += '<div class="set"><div class="sl"><span>Connections from outside appear here when exposed mode is on (Security tab).</span></div></div>';
+    $('#whoBox').innerHTML = h;
+    $$('[data-lvl] button').forEach(function (b) { b.onclick = function () { var k = b.parentNode.dataset.lvl, patch = {}; patch[k] = b.dataset.v; raise(b.dataset.v, function () { setAccess(patch).then(function () { whoSig = ''; }); }); }; });
+    $$('[data-clvl] button').forEach(function (b) { b.onclick = function () { var id = b.parentNode.dataset.clvl; raise(b.dataset.v, function () { api('api/connections/scope', { id: id, scope: b.dataset.v }).then(function (j) { report(j, 'Could not change it'); whoSig = ''; connSig = ''; }); }); }; });
+    $$('[data-tlvl] button').forEach(function (b) { b.onclick = function () { raise(b.dataset.v, function () { api('api/security', { tokenScope: b.dataset.v }).then(function (j) { report(j, 'Could not save'); whoSig = ''; }); }); }; });
+    $$('[data-qlvl] button').forEach(function (b) { b.onclick = function () { raise(b.dataset.v, function () { api('api/totp', { maxScope: b.dataset.v }).then(function (j) { report(j, 'Could not save'); whoSig = ''; }); }); }; });
+  }
+  function setAccess(patch) { return api('api/access', patch).then(function (j) { report(j, 'Could not save'); return j; }); }
+  function words(v, upper) { return v.split(/[\s,;]+/).map(function (x) { return upper ? x.toUpperCase() : x; }).filter(Boolean); }
+  $('#pBlocked').addEventListener('input', function () { var p = this.selectionStart; this.value = this.value.toUpperCase(); try { this.setSelectionRange(p, p); } catch (e) {} });
+  $('#pBlockedSave').onclick = function () {
+    var next = words($('#pBlocked').value, true);
+    var go = function () { setAccess({ blocked: next }).then(function (j) { if (j.ok) { blkLoaded = false; toast('Saved', true); } }); };
+    var removed = (snap.access.blocked || []).filter(function (d) { return next.indexOf(d) < 0; });
+    if (removed.length) confirmBox('Unblock ' + removed.join(', ') + '?', '<p>If Claude may run G-code (Hands on), it will be able to send ' + esc(removed.join(', ')) + '. These can move the printer without its safety checks, extrude cold or run commands on the printer\'s computer.</p>', 'Unblock', true).then(function (y) { if (y) go(); });
+    else go();
+  };
+  $('#pProtSave').onclick = function () {
+    var next = words($('#pProt').value, false);
+    var go = function () { setAccess({ protectedFiles: next }).then(function (j) { if (j.ok) { blkLoaded = false; toast('Saved', true); } }); };
+    var removed = (snap.access.protectedFiles || []).filter(function (d) { return next.indexOf(d) < 0; });
+    if (removed.length) confirmBox('Unprotect ' + removed.join(', ') + '?', '<p>If Claude may change config files (Help build), it will be able to change ' + esc(removed.join(', ')) + '. Changes are still backed up and wait for Keep or Revert.</p>', 'Unprotect', true).then(function (y) { if (y) go(); });
+    else go();
+  };
+  $('#pLimSave').onclick = function () {
+    var lim = { hotend: Number($('#pLimH').value), bed: Number($('#pLimB').value), other: Number($('#pLimO').value) };
+    if ([lim.hotend, lim.bed, lim.other].some(function (n) { return !isFinite(n) || n < 0 || n > 500 || $('#pLimH').value === '' || $('#pLimB').value === '' || $('#pLimO').value === ''; })) { toast('Enter three temperatures from 0 to 500 °C'); return; }
+    var old = snap.access.limits || {}, up = ['hotend', 'bed', 'other'].filter(function (k) { return lim[k] > old[k]; });
+    var go = function () { setAccess({ limits: lim }).then(function (j) { if (j.ok) { blkLoaded = false; toast('Saved', true); } }); };
+    if (up.length) confirmBox('Raise the temperature limits?', '<p>Claude will be able to heat ' + esc(up.join(' and ')) + ' up to ' + esc(up.map(function (k) { return lim[k] + ' °C'; }).join(' and ')) + '. Make sure your hardware (hotend, thermistor, bed) is rated for it.</p>', 'Raise', true).then(function (y) { if (y) go(); });
+    else go();
+  };
+
+  $('#tokShow').onclick = function () { getToken(); };
+  $('#tokNew').onclick = function () {
+    confirmBox('Make a new token?', '<p>The old token stops working right away. Claude Code and any connectors need the new connection details.</p>', 'New token', true).then(function (y) {
+      if (!y) return;
+      api('api/token', { regenerate: true }).then(function (j) { report(j, 'Could not make a new token'); if (j.ok) { token = j.token; fillConnect(document); toast('New token made', true); } });
+    });
+  };
+
+  $('#actClear').onclick = function () {
+    confirmBox('Clear the activity list?', '<p>The list of what Claude asked for is emptied. Nothing on the printer is touched.</p>', 'Clear', true).then(function (y) { if (y) api('api/activity-clear', {}).then(function (j) { report(j, 'Could not clear'); }); });
+  };
+
+  $$('#themeSeg button').forEach(function (b) { b.onclick = function () { themePref = b.dataset.v; try { localStorage.setItem('vm-theme', themePref); } catch (e) {} applyTheme(); paintSeg($('#themeSeg'), themePref); }; });
+  $('#bkKeep').addEventListener('change', function () { api('api/settings', { backupKeep: parseInt(this.value, 10) }).then(function (j) { report(j, 'Could not save'); }); });
+  $('#pinSet').onclick = function () {
+    var v = $('#pinNew').value;
+    if (v.length < 4) { toast('A PIN needs at least 4 characters'); return; }
+    api('api/settings', { newPin: v }).then(function (j) {
+      report(j, 'Could not set the PIN');
+      if (j.ok) { pin = v; try { sessionStorage.setItem('vm-pin', v); } catch (e) {} $('#pinNew').value = ''; toast('PIN set', true); }
+    });
+  };
+  $('#pinNew').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#pinSet').click(); });
+  $('#pinRm').onclick = function () {
+    if (!confirm('Remove the control PIN? Anyone on this network will be able to change permissions and see the token.')) return;
+    api('api/settings', { newPin: null }).then(function (j) { report(j, 'Could not remove the PIN'); if (j.ok) { pin = ''; try { sessionStorage.removeItem('vm-pin'); } catch (e) {} } });
+  };
+  $('#updImg').addEventListener('focus', function () { this.select(); });
+  $('#updBtn').onclick = function () {
+    var b = this; b.disabled = true; b.textContent = 'Checking…';
+    api('api/update-check', {}).then(function (j) { b.disabled = false; b.textContent = 'Check now'; if (!j.ok && !j.cancelled) toast(j.error || 'Could not check'); });
+  };
+
+  // ---------- setup guide ----------
+  // One step at a time on the right; every step and its status down the left.
+  var WZ = [
+    { id: 'welcome', title: 'Welcome' },
+    { id: 'allow', title: 'Connect your printer' },
+    { id: 'perms', title: 'What Claude may do' },
+    { id: 'pin', title: 'Protect this page' },
+    { id: 'claude', title: 'Connect Claude' },
+    { id: 'done', title: 'Finish' }
+  ];
+  var CHECK = '<svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>';
+  var wzStep = 0, wzScrolled = -1, wzDrawn = '', wzTesting = false, wzTried = false, wzWho = 'code', wzPick = null;
+
+  function marks(s) { return (s.setup && s.setup.marks) || {}; }
+  function prGood(s) { return !!pst(s).ok; }
+  function stepState(id, s) {
+    var m = marks(s), st = pst(s);
+    switch (id) {
+      case 'welcome':
+        if (s.health && s.health.storage.level === 'bad') return ['bad', 'Cannot save settings'];
+        return m.welcome || prGood(s) ? ['done', 'Read'] : ['todo', 'Start here'];
+      case 'allow':
+        if (st.ok) return ['done', 'Connected' + (st.hostname ? ' · ' + st.hostname : '')];
+        if (st.configured && st.error && !st.checking) return ['bad', 'Not reachable'];
+        return ['todo', st.checking ? 'Testing…' : 'Moonraker address'];
+      case 'perms': return m.perms ? ['done', modeText(s.access)] : ['todo', 'Choose'];
+      case 'pin': return s.pinRequired ? ['done', 'PIN set'] : m.pin === 'skip' ? ['skip', 'Skipped'] : ['todo', 'Optional'];
+      case 'claude': return s.everConnected ? ['done', 'Claude connected'] : m.claude === 'skip' ? ['skip', 'Skipped for now'] : ['todo', 'Waiting for Claude'];
+      case 'done': return s.setup && s.setup.completed ? ['done', 'Finished'] : ['todo', ''];
+    }
+    return ['todo', ''];
+  }
+  function firstOpenStep(s) {
+    for (var i = 0; i < WZ.length; i++) { var c = stepState(WZ[i].id, s)[0]; if (c === 'todo' || c === 'bad') return i; }
+    return WZ.length - 1;
+  }
+  function mark(name, value) { return api('api/setup', { mark: name, value: value == null ? true : value }); }
+
+  function renderWizardSide(s) {
+    var done = 0;
+    var h = WZ.map(function (w, i) {
+      var st = stepState(w.id, s);
+      if (st[0] === 'done' || st[0] === 'skip') done++;
+      return '<button class="wzs ' + st[0] + (i === wzStep ? ' on' : '') + '" data-wz="' + i + '"><span class="num">' + (st[0] === 'done' ? CHECK : st[0] === 'bad' ? '!' : i + 1) + '</span>' +
+        '<span class="wt"><b>' + esc(w.title) + '</b><small>' + esc(st[1]) + '</small></span></button>';
+    }).join('');
+    $('#wzSide').innerHTML = '<div class="wzprog">Setup · ' + Math.min(done, WZ.length) + ' of ' + WZ.length + ' done</div>' + h;
+    $$('[data-wz]', $('#wzSide')).forEach(function (b) { b.onclick = function () { goStep(+b.dataset.wz); }; });
+    // on a phone the steps are a sideways strip: keep the current one in view
+    var cur = $('.wzs.on', $('#wzSide'));
+    if (cur && wzScrolled !== wzStep && $('#wzSide').scrollWidth > $('#wzSide').clientWidth) { wzScrolled = wzStep; $('#wzSide').scrollLeft = cur.offsetLeft - 16; }
+  }
+
+  function goStep(i) {
+    wzStep = Math.max(0, Math.min(WZ.length - 1, i));
+    wzDrawn = ''; wzTried = false; wzPick = null;
+    if (snap) renderWizard(snap);
+    window.scrollTo(0, 0);
+  }
+  function next() { goStep(wzStep + 1); }
+
+  // footer: Back on the left; an optional quiet button and the main button on the right
+  function foot(main, opts) {
+    opts = opts || {};
+    return '<div class="wzf">' + (wzStep > 0 ? '<button id="wzBack">Back</button>' : '') + '<span class="sp"></span>' +
+      (opts.alt ? '<button id="wzAlt">' + esc(opts.alt) + '</button>' : '') +
+      '<button id="wzNext" class="on"' + (opts.disabled ? ' disabled' : '') + '>' + esc(main) + '</button></div>';
+  }
+  function head(title) { return '<div class="wzk">Step ' + (wzStep + 1) + ' of ' + WZ.length + '</div><h3>' + esc(title) + '</h3>'; }
+  function wire(onNext, onAlt) {
+    var b = $('#wzBack'); if (b) b.onclick = function () { goStep(wzStep - 1); };
+    var n = $('#wzNext'); if (n) n.onclick = function () {
+      n.disabled = true;
+      Promise.resolve(onNext()).then(function (ok) { n.disabled = false; if (ok !== false) next(); });
+    };
+    var a = $('#wzAlt'); if (a && onAlt) a.onclick = onAlt;
+  }
+
+  function hintFor(err) {
+    if (/\b40[13]\b|refused VoronMCP|unauthori[sz]ed|forbidden/i.test(err)) return 'Moonraker does not trust VoronMCP yet. Add the IP address of VoronMCP\'s machine to trusted_clients under [authorization] in moonraker.conf and restart Moonraker, or paste Moonraker\'s API key above.';
+    if (/refused the connection|ECONNREFUSED|connection refused/i.test(err)) return 'Nothing answered at that address. Check the IP address, that the port is 7125 (Moonraker\'s usual port, not Mainsail\'s port 80), and that Moonraker is running.';
+    if (/\.local|could not find|ENOTFOUND|EAI_AGAIN|not found/i.test(err)) return 'That name could not be found. Use the printer\'s IP address instead, for example http://192.168.1.50:7125. Names ending in .local usually do not work from inside a container.';
+    if (/took too long|timed out|could not reach|EHOSTUNREACH|ETIMEDOUT/i.test(err)) return 'No answer from that address. Check that the printer is on, and that the IP address is the one Mainsail or Fluidd opens at.';
+    return '';
+  }
+
+  // the parts of a step that change while it is open (no redraw, so typing is not lost)
+  function wizardLive(s) {
+    var id = WZ[wzStep].id, st = pst(s);
+    if (id === 'welcome' && $('#wzStore')) {
+      var hs = s.health && s.health.storage, nb = $('#wzNext');
+      $('#wzStore').innerHTML = !hs ? '<div class="waitbox"><span class="spin"></span>Checking where VoronMCP saves its settings…</div>'
+        : hs.level === 'bad' ? '<div class="errbox"><b>VoronMCP cannot save its settings yet.</b> ' + esc(hs.problems.join(' ')) + ' Fix this first, then press <b>Check again</b>. <button class="link" id="wzStoreRe">Check again</button></div>'
+        : hs.level === 'warn' ? '<div class="errbox" style="border-color:var(--warn);background:color-mix(in srgb, var(--warn) 10%, transparent)"><b>Warning:</b> ' + esc(hs.problems.join(' ')) + '</div>'
+        : '<div class="okbox">Settings are saved to ' + esc(hs.where) + (hs.free ? ', ' + esc(hs.free) + ' free' : '') + '. They survive restarts and updates.</div>';
+      var re = $('#wzStoreRe'); if (re) re.onclick = function () { api('api/health-check', {}); };
+      if (nb) nb.disabled = !!(hs && hs.level === 'bad');
+    }
+    if (id === 'allow') {
+      var box = $('#wzConn'), nx = $('#wzNext');
+      if (!box) return;
+      if (wzTesting || (st.checking && !st.ok)) box.innerHTML = '<div class="waitbox"><span class="spin"></span>Talking to Moonraker…</div>';
+      else if (st.ok) box.innerHTML = '<div class="okbox"><b>Connected.</b> ' + (st.hostname ? esc(st.hostname) + ' answered' : 'Moonraker answered') + (st.ms ? ' in ' + esc(st.ms) + ' ms' : '') + (st.moonraker ? ' (Moonraker ' + esc(st.moonraker) + ')' : '') + '. Klipper: ' + esc((KLIPPY[st.klippy] || st.klippy || 'unknown').toLowerCase()) + '.' +
+          (klippyBad(st) ? '<br>Klipper is not ready' + (st.message ? ': ' + esc(st.message) : '') + '. That is fine for now: Claude can help find out why.' : '') + '</div>';
+      else if (st.configured && st.error && (wzTried || !st.checking)) box.innerHTML = '<div class="errbox"><b>Could not connect.</b> ' + esc(hintFor(st.error) || st.error) + '<br><small style="color:var(--dim)">' + esc(st.error) + '</small></div>';
+      else box.innerHTML = '';
+      if (nx) nx.disabled = !st.ok;
+    }
+    if (id === 'claude') {
+      var w = $('#wzWait'), n2 = $('#wzNext');
+      if (!w) return;
+      var last = (s.activity || [])[0];
+      w.innerHTML = s.everConnected
+        ? '<div class="okbox"><b>Claude is connected.</b>' + (last ? ' Its last request was <code>' + esc(last.tool) + '</code>, ' + esc(ago(last.t)) + '.' : '') + '</div>'
+        : '<div class="waitbox"><span class="spin"></span><span>Waiting for Claude\'s first request. This turns green by itself when Claude connects.</span></div>';
+      if (n2) n2.disabled = !s.everConnected;
+    }
+  }
+
+  function renderWizard(s) {
+    renderWizardSide(s);
+    var w = WZ[wzStep], sig = w.id + '|' + (w.id === 'pin' ? s.pinRequired : '') + '|' + (w.id === 'allow' ? s.demo + '' + s.printer.hasKey : '') + '|' + (w.id === 'claude' ? token + s.publicUrl + wzWho + s.everConnected + (s.security && s.security.mode) : '') + '|' + (w.id === 'done' ? JSON.stringify(WZ.map(function (x) { return stepState(x.id, s)[0]; })) : '') + '|' + (w.id === 'perms' ? wzPick : '');
+    if (sig !== wzDrawn) { wzDrawn = sig; drawStep(w.id, s); }
+    wizardLive(s);
+  }
+
+  function drawStep(id, s) {
+    var pane = $('#wzPane'), p = s.printer;
+    if (id === 'welcome') {
+      pane.innerHTML = head('Let\'s connect Claude to your printer') +
+        '<div class="wzbody"><p>VoronMCP lets Claude look inside your Klipper printer: read klippy.log, check the CAN and MCU links, read the config and macros, and help you tune and troubleshoot. It takes about five minutes.</p>' +
+        '<p><b>Nothing is installed on the printer.</b> VoronMCP talks to Moonraker, the same way Mainsail and Fluidd do.</p>' +
+        '<div id="wzStore"></div>' +
+        '<ol class="steps"><li><b>Connect your printer:</b> let VoronMCP in to Moonraker</li><li><b>Choose what Claude may do.</b> To start with, it can only look</li><li><b>Protect this page</b> with a PIN (optional)</li><li><b>Connect Claude</b> and ask it a first question</li></ol></div>' +
+        foot('Start');
+      wire(function () { return mark('welcome'); });
+    }
+    if (id === 'allow') {
+      pane.innerHTML = head('Connect your printer') +
+        '<div class="wzbody"><p>Moonraker only answers machines it trusts. Do <b>one</b> of these first:</p>' +
+        '<ol class="steps"><li><b>Trust VoronMCP\'s machine:</b> in Mainsail or Fluidd, edit <code>moonraker.conf</code>, and under <code>[authorization]</code> add the IP address of the machine VoronMCP runs on to <code>trusted_clients</code> (or your network, like <code>192.168.1.0/24</code>). Save and restart Moonraker.</li>' +
+        '<li><b>Or use an API key:</b> Fluidd shows it under Settings &gt; Authentication, or open <code>/access/api_key</code> on Moonraker from a trusted computer. Paste it below.</li></ol>' +
+        '<p>Then enter Moonraker\'s address with the printer\'s <b>IP address</b> (not a .local name) and port 7125.</p>' +
+        '<div class="set first"><div class="sl"><b>Moonraker address</b><span>For example http://192.168.1.50:7125</span></div><div class="sc"><input id="wzUrl" class="txt wide" placeholder="http://192.168.1.50:7125" spellcheck="false" autocomplete="off" autocapitalize="off" value="' + esc(p.url || '') + '" aria-label="Moonraker address"></div></div>' +
+        '<div class="set"><div class="sl"><b>API key</b><span>' + (p.hasKey ? 'One is saved. Paste a new one only to replace it' : 'Optional: leave empty if you used trusted_clients') + '</span></div><div class="sc"><input id="wzKey" class="txt wide" type="password" autocomplete="new-password" spellcheck="false" placeholder="' + (p.hasKey ? 'Saved' : 'Optional') + '" aria-label="API key"></div></div>' +
+        '<div class="set"><div class="sl"></div><div class="sc"><button id="wzConnect" class="on">Connect</button></div></div>' +
+        '<div id="wzConn"></div></div>' +
+        foot('Next', { disabled: !prGood(s) });
+      wire(function () { return mark('allow'); });
+      if (s.demo) { $('#wzUrl').disabled = $('#wzKey').disabled = true; }
+      var go = function () {
+        var url = $('#wzUrl').value.trim(), key = $('#wzKey').value.trim();
+        if (!s.demo && !url) { toast('Enter the address first'); return; }
+        wzTesting = true; wzTried = true; wizardLive(snap);
+        var body = { url: url }; if (key) body.apiKey = key;
+        var save = s.demo ? Promise.resolve({ ok: true }) : api('api/printer', body);
+        save.then(function (j) {
+          if (!j.ok) { wzTesting = false; wizardLive(snap); report(j, 'Could not save'); return; }
+          $('#wzKey').value = '';
+          return api('api/printer-test', {}).then(function () { wzTesting = false; wizardLive(snap); });
+        });
+      };
+      $('#wzConnect').onclick = go;
+      $('#wzUrl').addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+      $('#wzKey').addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+    }
+    if (id === 'perms') {
+      var a = s.access, cur = wzPick || ({ read: 'look', build: 'build', hands: 'hands', full: 'hands' })[a.local] || 'look';
+      var P = [
+        ['look', 'Look only', 'Claude can read status, klippy.log, CAN and MCU link health, config files, macros, temperatures, bed mesh and print history, and change nothing. Good to start with.', true],
+        ['build', 'Help build', 'Also change config files (backed up, each change waits for your Keep or Revert), restart Klipper and SAVE_CONFIG. Never while a print is running.'],
+        ['hands', 'Hands on', 'Also run G-code: moves, heating, homing, QGL, input shaper and PID calibration, and control prints. Only when you are at the printer.']
+      ];
+      pane.innerHTML = head('What may Claude do?') +
+        '<div class="wzbody"><div class="picks">' + P.map(function (x) {
+          return '<button class="pick' + (cur === x[0] ? ' on' : '') + '" data-pick="' + x[0] + '"><span class="rb"></span><span><b>' + esc(x[1]) + (x[3] ? '<span class="tag2">Recommended</span>' : '') + '</b><span>' + esc(x[2]) + '</span></span></button>';
+        }).join('') + '</div>' +
+        '<p>Always blocked, whatever you choose: ' + (a.blocked || []).map(function (d) { return '<span class="chip b">' + esc(d) + '</span>'; }).join(' ') + '. Heater targets above ' + esc((a.limits || {}).hotend) + ' °C (hotend) and ' + esc((a.limits || {}).bed) + ' °C (bed) are refused.</p>' +
+        '<p>This is the level for Claude on your network. Connections from outside each get their own level when you approve them. Deleting files (the Full level) stays off. You can change all of this later under <b>Permissions</b>.</p></div>' +
+        foot('Use this');
+      $$('[data-pick]', pane).forEach(function (b) { b.onclick = function () { wzPick = b.dataset.pick; renderWizard(snap); }; });
+      wire(function () {
+        var pick = wzPick || cur;
+        var go = function () {
+          return api('api/access', { enabled: true, local: pick === 'look' ? 'read' : pick }).then(function (j) {
+            if (!j.ok) { report(j, 'Could not save'); return false; }
+            return mark('perms').then(function () { return true; });
+          });
+        };
+        if (pick === 'hands') return confirmBox('Allow Hands on?', '<p>' + esc(LVL_WARN.hands) + '</p>', 'Allow').then(function (y) { return y ? go() : false; });
+        return go();
+      });
+    }
+    if (id === 'pin') {
+      pane.innerHTML = head('Protect this page') +
+        '<div class="wzbody"><p>Anyone on your network who opens this page can change what Claude may do, restart Klipper and see Claude\'s access token. A PIN stops that. You type it once per browser session. The emergency stop never asks for it.</p>' +
+        (s.pinRequired ? '<div class="okbox"><b>A PIN is set.</b> You can change or remove it later under Settings.</div>'
+          : '<div class="set first"><div class="sl"><b>PIN</b><span>At least 4 characters</span></div><div class="sc"><input id="wzPin" class="txt" type="password" autocomplete="new-password" placeholder="New PIN" aria-label="New PIN"><input id="wzPin2" class="txt" type="password" autocomplete="new-password" placeholder="Again" aria-label="PIN again"></div></div>') +
+        '</div>' + foot(s.pinRequired ? 'Next' : 'Set PIN', { alt: s.pinRequired ? null : 'Skip' });
+      wire(function () {
+        if (snap.pinRequired) return true;
+        var v = $('#wzPin').value, v2 = $('#wzPin2').value;
+        if (v.length < 4) { toast('A PIN needs at least 4 characters'); return false; }
+        if (v !== v2) { toast('The two PINs are not the same'); return false; }
+        return api('api/settings', { newPin: v }).then(function (j) {
+          if (!j.ok) { report(j, 'Could not set the PIN'); return false; }
+          pin = v; try { sessionStorage.setItem('vm-pin', v); } catch (e) {}
+          return mark('pin');
+        });
+      }, function () { mark('pin', 'skip').then(next); });
+    }
+    if (id === 'claude') {
+      if (!token) getToken();
+      var code = token ? codeCmd(token) : 'Getting the token…';
+      var url = connUrl();
+      var first = '<b>"' + esc(TRY[0]) + '"</b>';
+      var body = '<div class="seg" id="wzWho" style="margin:2px 0 12px"><button data-v="code"' + (wzWho === 'code' ? ' class="on"' : '') + '>Claude Code on a computer</button><button data-v="web"' + (wzWho === 'web' ? ' class="on"' : '') + '>claude.ai and the phone app</button></div>';
+      if (wzWho === 'code') {
+        body += '<ol class="steps"><li>On a Mac or PC on this network, open <b>Terminal</b>.</li><li>Paste this and press Return:</li></ol>' +
+          '<div class="copyrow"><pre class="cmd' + (token ? '' : ' dim') + '" id="cmdCode">' + esc(code) + '</pre><button data-copy="cmdCode">Copy</button></div>' +
+          '<ol class="steps" start="3"><li>Start Claude Code with <code>claude</code> and ask: ' + first + '</li></ol>';
+      } else {
+        body += webSteps(s, 'z') + (s.security && s.security.mode === 'exposed' && url ? '<ol class="steps" start="6"><li>In a new chat, ask: ' + first + '</li></ol>' : '');
+      }
+      pane.innerHTML = head('Connect Claude') + '<div class="wzbody">' + body + '<div id="wzWait"></div></div>' + foot('Next', { alt: s.everConnected ? null : 'Skip for now', disabled: !s.everConnected });
+      $$('#wzWho button', pane).forEach(function (b) { b.onclick = function () { wzWho = b.dataset.v; renderWizard(snap); }; });
+      wire(function () { return mark('claude'); }, function () { mark('claude', 'skip').then(next); });
+    }
+    if (id === 'done') {
+      var rows = WZ.slice(0, -1).map(function (x) {
+        var t = stepState(x.id, s);
+        return '<div class="sumrow wzs ' + t[0] + '" style="padding:8px 0"><span class="num">' + (t[0] === 'done' ? CHECK : t[0] === 'bad' ? '!' : '–') + '</span><span>' + esc(x.title) + '</span><small>' + esc(t[1]) + '</small></div>';
+      }).join('');
+      var open = WZ.slice(0, -1).filter(function (x) { var c = stepState(x.id, s)[0]; return c === 'todo' || c === 'bad'; });
+      pane.innerHTML = head(open.length ? 'Almost there' : 'All set') +
+        '<div class="wzbody"><p>' + (open.length ? 'These steps still need you. Click one on the left to finish it, or open the dashboard and come back later.' : 'Claude can now look inside your printer. Every request it makes shows up on the dashboard.') + '</p>' + rows +
+        '<p style="margin-top:12px">Things to ask Claude: ' + TRY.map(function (t) { return '<b>"' + esc(t) + '"</b>'; }).join(', ') + '</p>' +
+        '<p>You can open this guide again from Settings.</p></div>' +
+        foot('Open the dashboard');
+      wire(function () { return api('api/setup', { completed: true }).then(function () { closeWizard(); return false; }); });
+    }
+  }
+
+  function openWizard(step) {
+    inWizard = true; inSetup = false; inSecurity = false;
+    $('#tab-security').classList.add('hide'); secBtn.classList.remove('on');
+    $('#tab-main').classList.add('hide'); $('#tab-setup').classList.add('hide'); $('#tab-wizard').classList.remove('hide');
+    gear.classList.add('on'); gear.title = 'Leave the setup guide'; $('span', gear).textContent = 'Close';
+    document.body.classList.add('in-setup');
+    wzStep = step != null ? step : (snap ? firstOpenStep(snap) : 0);
+    wzDrawn = '';
+    if (snap) render(snap);
+    window.scrollTo(0, 0);
+  }
+  function closeWizard() {
+    inWizard = false;
+    $('#tab-wizard').classList.add('hide');
+    $('span', gear).textContent = 'Done';
+    showTab(false);
+  }
+
+  // ---------- tabs ----------
+  var gear = $('#gear');
+  function showSub(name) {
+    subPane = name; try { localStorage.setItem('vm-sub', name); } catch (e) {}
+    $$('#sub button').forEach(function (b) { b.classList.toggle('on', b.dataset.sub === name); });
+    $$('[data-pane]').forEach(function (p) { p.classList.toggle('hide', p.dataset.pane !== name); });
+    if (name === 'printer') prLoaded = false;
+    if (name === 'perm') { blkLoaded = false; whoSig = ''; }
+    if (name === 'backups') { bkSig = null; }
+    if (name === 'settings') { keepLoaded = false; paintSeg($('#themeSeg'), themePref); }
+    if (snap) updateSettings(snap);
+  }
+  $$('#sub button').forEach(function (b) { b.onclick = function () { showSub(b.dataset.sub); }; });
+  function showTab(setup) {
+    inSetup = setup; inWizard = false; inSecurity = false;
+    $('#tab-wizard').classList.add('hide'); $('#tab-security').classList.add('hide'); secBtn.classList.remove('on'); $('span', gear).textContent = 'Done';
+    $('#tab-main').classList.toggle('hide', setup); $('#tab-setup').classList.toggle('hide', !setup);
+    gear.classList.toggle('on', setup); gear.title = setup ? 'Back to the dashboard' : 'Settings';
+    document.body.classList.toggle('in-setup', setup);
+    if (setup) showSub(subPane); else if (snap) render(snap);
+    window.scrollTo(0, 0);
+  }
+  gear.onclick = function () { if (inWizard) closeWizard(); else showTab(inSecurity ? true : !inSetup); };
+
+  // the Security tab
+  var secBtn = $('#secBtn');
+  function openSecurity() {
+    inSecurity = true; inSetup = false; inWizard = false;
+    ['#tab-main', '#tab-setup', '#tab-wizard'].forEach(function (t) { $(t).classList.add('hide'); });
+    $('#tab-security').classList.remove('hide');
+    secBtn.classList.add('on'); gear.classList.remove('on'); gear.title = 'Settings'; $('span', gear).textContent = 'Done';
+    document.body.classList.add('in-setup');
+    pubLoaded = false; connSig = '';
+    if (snap) render(snap);
+    window.scrollTo(0, 0);
+  }
+  secBtn.onclick = function () { if (inSecurity) showTab(false); else openSecurity(); };
+  function renderSecButton(s) {
+    var sec = s.security || {}, n = (sec.pending || []).length;
+    secBtn.classList.toggle('exp', sec.mode === 'exposed');
+    secBtn.title = 'Security: ' + (sec.mode === 'exposed' ? 'exposed' : 'local only') + (n ? ', ' + plural(n, 'approval') + ' waiting' : '');
+    $('#secBadge').textContent = n; $('#secBadge').classList.toggle('hide', !n);
+  }
+  $('#wzAgain').onclick = function () { openWizard(0); };
+
+  // full screen (hidden where the browser can't, or when installed as an app)
+  (function () {
+    var root = document.documentElement, d = document, btn = $('#fsBtn');
+    var can = !!(root.requestFullscreen || root.webkitRequestFullscreen);
+    var standalone = matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || navigator.standalone;
+    if (!can || standalone) { btn.classList.add('hide'); return; }
+    btn.onclick = function () {
+      if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+      else { var r = (root.requestFullscreen || root.webkitRequestFullscreen).call(root); if (r && r.catch) r.catch(function () {}); }
+    };
+  })();
+
+  // ---------- live data ----------
+  function start(first) {
+    render(first);
+    if (!(first.setup && first.setup.completed) || /[?&]setup\b/.test(location.search)) openWizard();
+    var es = new EventSource('events');
+    es.onmessage = function (e) { render(JSON.parse(e.data)); };
+    setInterval(function () { if (Date.now() - lastMsg > 5000) document.body.classList.add('offline'); }, 1000);
+  }
+  applyTheme(); paintSeg($('#themeSeg'), themePref);
+  fetch('api/state', { cache: 'no-store' })
+    .then(function (r) { if (!r.ok) throw new Error('no server'); return r.json(); })
+    .then(start)
+    .catch(function () { $('#alerts').innerHTML = '<div class="errbox">Could not reach the VoronMCP server. Open this page from the address VoronMCP is running on.</div>'; });
+})();
+</script>
+</body>
+</html>
